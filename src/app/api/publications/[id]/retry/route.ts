@@ -42,6 +42,10 @@ export const POST = handler(async (_req, ctx: Ctx) => {
       platform: prev.platform,
       caption: prev.caption,
       status: PublicationStatus.QUEUED,
+      // Preserve batch linkage so a fixed clip resumes the sequential chain.
+      batchId: prev.batchId,
+      batchSeq: prev.batchSeq,
+      batchIntervalMin: prev.batchIntervalMin,
     },
     include: { clip: true, socialAccount: true },
   });

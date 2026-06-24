@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { api } from "@/lib/client";
 import type { ClipMode } from "@/lib/types";
+import { useToast } from "@/components/ui/Toast";
 
 export function NewVideoPanel({ onCreated }: { onCreated: () => void }) {
   const [tab, setTab] = useState<"url" | "upload">("url");
@@ -16,6 +17,7 @@ export function NewVideoPanel({ onCreated }: { onCreated: () => void }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [progress, setProgress] = useState(0);
+  const toast = useToast();
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -41,6 +43,7 @@ export function NewVideoPanel({ onCreated }: { onCreated: () => void }) {
         await uploadWithProgress(file);
         setFile(null);
       }
+      toast.success("Video added — generating clips…");
       onCreated();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to create video");

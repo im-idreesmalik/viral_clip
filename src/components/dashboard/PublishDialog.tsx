@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { api, PLATFORM_META } from "@/lib/client";
 import type { ClipDTO, SocialAccountDTO, PlatformName } from "@/lib/types";
+import { useToast } from "@/components/ui/Toast";
 
 export function PublishDialog({
   clip,
@@ -15,12 +16,13 @@ export function PublishDialog({
 }) {
   const [accounts, setAccounts] = useState<SocialAccountDTO[]>([]);
   const [accountId, setAccountId] = useState<string>("");
-  const [caption, setCaption] = useState(clip.title);
+  const [caption, setCaption] = useState(clip.composedCaption || clip.title);
   const [schedule, setSchedule] = useState(false);
   const [publishAt, setPublishAt] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState(false);
+  const toast = useToast();
 
   useEffect(() => {
     api<{ accounts: SocialAccountDTO[] }>("/api/social/accounts")
@@ -52,6 +54,7 @@ export function PublishDialog({
         }),
       });
       setDone(true);
+      toast.success(schedule ? "Clip scheduled" : "Clip queued for publishing");
       onPublished();
       setTimeout(onClose, 1200);
     } catch (err) {
@@ -62,8 +65,8 @@ export function PublishDialog({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={onClose}>
-      <div className="card w-full max-w-md p-6" onClick={(e) => e.stopPropagation()}>
+    <div className="fixed inset-0 z-50 flex animate-fade-in items-center justify-center bg-black/60 p-4 backdrop-blur-sm" onClick={onClose}>
+      <div className="card w-full max-w-md animate-scale-in p-6" onClick={(e) => e.stopPropagation()}>
         <h3 className="mb-4 text-lg font-semibold">Publish clip</h3>
 
         {done ? (

@@ -38,6 +38,8 @@ export interface ClipDTO {
   thumbnailUrl: string | null;
   captionsUrl: string | null;
   errorMessage: string | null;
+  publishedPlatforms: PlatformName[];
+  composedCaption: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -59,6 +61,7 @@ export interface VideoDTO {
   sizeBytes: number | null;
   thumbnailUrl: string | null;
   sourceMediaUrl: string | null;
+  hashtags: string | null;
   errorMessage: string | null;
   createdAt: string;
   updatedAt: string;

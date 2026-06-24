@@ -8,50 +8,99 @@
 
 html,
 body {
-  background: #0a0a0f;
+  background-color: #0a0a0f;
   color: #e8e8f0;
+}
+
+/* Ambient brand glow at the top of every page for depth. */
+body {
+  background-image: radial-gradient(70% 50% at 50% -10%, rgba(124, 92, 255, 0.12) 0%, rgba(124, 92, 255, 0) 70%);
+  background-repeat: no-repeat;
+  background-attachment: fixed;
+}
+
+::selection {
+  background: rgba(124, 92, 255, 0.35);
+  color: #fff;
 }
 
 /* Subtle scrollbar to match the dark theme. */
 * {
   scrollbar-width: thin;
-  scrollbar-color: #3a3a4d #111118;
+  scrollbar-color: #3a3a4d transparent;
 }
 *::-webkit-scrollbar {
   width: 10px;
   height: 10px;
 }
 *::-webkit-scrollbar-thumb {
-  background: #3a3a4d;
+  background: #2d2d3d;
+  border: 2px solid transparent;
+  background-clip: content-box;
   border-radius: 8px;
+}
+*::-webkit-scrollbar-thumb:hover {
+  background: #3a3a4d;
+  background-clip: content-box;
+}
+
+@layer base {
+  /* Consistent keyboard focus ring across interactive elements. */
+  a:focus-visible,
+  button:focus-visible,
+  input:focus-visible,
+  textarea:focus-visible,
+  select:focus-visible,
+  [tabindex]:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 2px #0a0a0f, 0 0 0 4px rgba(124, 92, 255, 0.6);
+    border-radius: 0.5rem;
+  }
 }
 
 @layer components {
   .btn {
-    @apply inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50;
+    @apply inline-flex select-none items-center justify-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-all duration-150 active:scale-[0.98] disabled:pointer-events-none disabled:opacity-50;
   }
   .btn-primary {
-    @apply btn bg-brand-500 text-white hover:bg-brand-600;
+    @apply btn bg-brand-gradient text-white shadow-glow-sm hover:brightness-110 hover:shadow-glow;
   }
   .btn-secondary {
-    @apply btn border border-ink-600 bg-ink-800 text-ink-100 hover:bg-ink-700;
+    @apply btn border border-ink-700 bg-ink-800 text-ink-100 hover:border-ink-600 hover:bg-ink-700;
   }
   .btn-ghost {
-    @apply btn text-ink-100 hover:bg-ink-800;
+    @apply btn text-ink-200 hover:bg-ink-800 hover:text-ink-100;
   }
   .btn-danger {
-    @apply btn border border-red-900/60 bg-red-950/40 text-red-300 hover:bg-red-900/40;
+    @apply btn border border-red-900/60 bg-red-950/40 text-red-300 hover:border-red-800 hover:bg-red-900/40;
   }
+
   .card {
-    @apply rounded-xl border border-ink-700 bg-ink-900;
+    @apply rounded-xl border border-ink-700/80 bg-ink-900/80 shadow-card backdrop-blur-sm;
   }
+  /* Opt-in lift on hover for clickable cards. */
+  .card-hover {
+    @apply transition-all duration-200 hover:-translate-y-0.5 hover:border-ink-600 hover:shadow-card-hover;
+  }
+
   .input {
-    @apply w-full rounded-lg border border-ink-600 bg-ink-950 px-3 py-2 text-sm text-ink-100 outline-none placeholder:text-ink-600 focus:border-brand-500;
+    @apply w-full rounded-lg border border-ink-700 bg-ink-950/80 px-3 py-2 text-sm text-ink-100 outline-none transition-colors placeholder:text-ink-500 hover:border-ink-600 focus:border-brand-500 focus:ring-2 focus:ring-brand-500/30;
   }
   .label {
-    @apply mb-1 block text-xs font-medium uppercase tracking-wide text-ink-100/60;
+    @apply mb-1 block text-xs font-medium uppercase tracking-wide text-ink-300;
   }
   .badge {
     @apply inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium;
+  }
+
+  /* Loading placeholder with a shimmer sweep. */
+  .skeleton {
+    @apply relative overflow-hidden rounded-lg bg-ink-800;
+  }
+  .skeleton::after {
+    content: "";
+    @apply absolute inset-0 -translate-x-full;
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.06), transparent);
+    animation: shimmer 1.6s infinite;
   }
 }

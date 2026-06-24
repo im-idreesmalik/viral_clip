@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { api, PLATFORM_META } from "@/lib/client";
 import type { PublicationDTO } from "@/lib/types";
 import { PublicationStatusBadge } from "@/components/dashboard/badges";
+import { useToast } from "@/components/ui/Toast";
 
 const ACTIVE = new Set(["SCHEDULED", "QUEUED", "PUBLISHING"]);
 
@@ -11,6 +12,7 @@ export default function PublishingPage() {
   const [pubs, setPubs] = useState<PublicationDTO[]>([]);
   const [loading, setLoading] = useState(true);
   const [retrying, setRetrying] = useState<string | null>(null);
+  const toast = useToast();
 
   const load = useCallback(async () => {
     try {
@@ -26,9 +28,10 @@ export default function PublishingPage() {
       setRetrying(id);
       try {
         await api(`/api/publications/${id}/retry`, { method: "POST" });
+        toast.success("Re-queued for publishing");
         await load();
       } catch (err) {
-        alert(err instanceof Error ? err.message : "Retry failed");
+        toast.error(err instanceof Error ? err.message : "Retry failed");
       } finally {
         setRetrying(null);
       }
@@ -54,7 +57,18 @@ export default function PublishingPage() {
       </p>
 
       {loading ? (
-        <p className="text-ink-100/50">Loading…</p>
+        <div className="card divide-y divide-ink-800">
+          {[0, 1, 2].map((i) => (
+            <div key={i} className="flex items-center gap-4 p-4">
+              <div className="skeleton h-12 w-12 shrink-0" />
+              <div className="flex-1 space-y-2">
+                <div className="skeleton h-4 w-1/3" />
+                <div className="skeleton h-3 w-1/4" />
+              </div>
+              <div className="skeleton h-6 w-20" />
+            </div>
+          ))}
+        </div>
       ) : pubs.length === 0 ? (
         <div className="card flex flex-col items-center justify-center p-12 text-center">
           <div className="mb-3 text-4xl">📡</div>

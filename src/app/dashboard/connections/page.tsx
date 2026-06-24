@@ -4,6 +4,7 @@ import { Suspense, useCallback, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { api, PLATFORM_META } from "@/lib/client";
 import type { SocialAccountDTO, PlatformCatalogItem } from "@/lib/types";
+import { useToast } from "@/components/ui/Toast";
 
 export default function ConnectionsPage() {
   return (
@@ -18,6 +19,7 @@ function ConnectionsContent() {
   const [accounts, setAccounts] = useState<SocialAccountDTO[]>([]);
   const [catalog, setCatalog] = useState<PlatformCatalogItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const toast = useToast();
 
   const load = useCallback(async () => {
     const data = await api<{ accounts: SocialAccountDTO[]; platforms: PlatformCatalogItem[] }>(
@@ -34,8 +36,13 @@ function ConnectionsContent() {
 
   async function disconnect(id: string) {
     if (!confirm("Disconnect this account?")) return;
-    await api(`/api/social/accounts/${id}`, { method: "DELETE" });
-    load();
+    try {
+      await api(`/api/social/accounts/${id}`, { method: "DELETE" });
+      toast.success("Account disconnected");
+      load();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to disconnect");
+    }
   }
 
   const connectedError = params.get("error");
@@ -60,14 +67,25 @@ function ConnectionsContent() {
       )}
 
       {loading ? (
-        <p className="text-ink-100/50">Loading…</p>
+        <div className="space-y-3">
+          {[0, 1, 2, 3].map((i) => (
+            <div key={i} className="card flex items-center gap-3 p-4">
+              <div className="skeleton h-10 w-10 shrink-0 rounded-lg" />
+              <div className="flex-1 space-y-2">
+                <div className="skeleton h-4 w-24" />
+                <div className="skeleton h-3 w-32" />
+              </div>
+              <div className="skeleton h-8 w-24" />
+            </div>
+          ))}
+        </div>
       ) : (
         <div className="space-y-3">
           {catalog.map((p) => {
             const accountsForPlatform = accounts.filter((a) => a.platform === p.platform);
             const meta = PLATFORM_META[p.platform];
             return (
-              <div key={p.platform} className="card p-4">
+              <div key={p.platform} className="card card-hover p-4">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
                     <span

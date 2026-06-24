@@ -51,9 +51,10 @@ export function segmentVideo(opts: SegmentOptions): DetectedClip[] {
 }
 
 /**
- * Title a sequential part: always starts with the part number. When a
- * transcript is available we append a short snippet of what's said in that
- * window so the title is meaningful (e.g. "Part 2 — so the first thing to know").
+ * Title a sequential part. When a transcript is available we use a short snippet
+ * of what's said in that window as the clip's descriptive title (the "your
+ * title" part of the published caption); otherwise we fall back to "Part N".
+ * The "Part N" prefix itself is added at publish time by composeCaption.
  */
 function partTitle(
   order: number,
@@ -61,16 +62,16 @@ function partTitle(
   endSec: number,
   transcript?: Transcript | null,
 ): string {
-  const base = `Part ${order}`;
-  if (!transcript) return base;
+  const fallback = `Part ${order}`;
+  if (!transcript) return fallback;
   const text = transcript.segments
     .filter((s) => s.end > startSec && s.start < endSec)
     .map((s) => s.text)
     .join(" ")
     .trim();
-  if (!text) return base;
-  const snippet = text.split(/\s+/).slice(0, 7).join(" ").replace(/[.,!?;:]+$/, "");
-  return snippet ? `${base} — ${snippet}` : base;
+  if (!text) return fallback;
+  const snippet = text.split(/\s+/).slice(0, 8).join(" ").replace(/[.,!?;:]+$/, "");
+  return snippet || fallback;
 }
 
 function snapToBoundary(

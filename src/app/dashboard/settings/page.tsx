@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { api, PLATFORM_META } from "@/lib/client";
 import type { AutoConfigDTO, SocialAccountDTO, PlatformName } from "@/lib/types";
+import { useToast } from "@/components/ui/Toast";
 
 const INTERVAL_PRESETS = [
   { label: "Every 2 hours", value: 120 },
@@ -17,6 +18,7 @@ export default function AutomationPage() {
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const toast = useToast();
 
   useEffect(() => {
     Promise.all([
@@ -28,7 +30,13 @@ export default function AutomationPage() {
     });
   }, []);
 
-  if (!config) return <p className="text-ink-100/50">Loading…</p>;
+  if (!config)
+    return (
+      <div className="max-w-2xl space-y-4">
+        <div className="skeleton h-7 w-40" />
+        <div className="skeleton h-64 w-full" />
+      </div>
+    );
 
   const connectedPlatforms = Array.from(new Set(accounts.map((a) => a.platform)));
 
@@ -58,6 +66,7 @@ export default function AutomationPage() {
       });
       setConfig(updated);
       setSaved(true);
+      toast.success("Automation settings saved");
       setTimeout(() => setSaved(false), 2000);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to save");

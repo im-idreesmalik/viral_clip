@@ -1,18 +1,28 @@
 "use client";
 
 import { useState } from "react";
-import { api, formatDuration } from "@/lib/client";
-import type { ClipDTO } from "@/lib/types";
+import { api, formatDuration, PLATFORM_META } from "@/lib/client";
+import type { ClipDTO, ClipMode } from "@/lib/types";
 import { ClipStatusBadge, ScoreBadge } from "@/components/dashboard/badges";
 import { PublishDialog } from "@/components/dashboard/PublishDialog";
+import { useToast } from "@/components/ui/Toast";
 
-export function ClipCard({ clip, onChange }: { clip: ClipDTO; onChange: () => void }) {
+export function ClipCard({
+  clip,
+  onChange,
+  clipMode,
+}: {
+  clip: ClipDTO;
+  onChange: () => void;
+  clipMode?: ClipMode;
+}) {
   const [busy, setBusy] = useState<string | null>(null);
   const [editing, setEditing] = useState(false);
   const [title, setTitle] = useState(clip.title);
   const [start, setStart] = useState(clip.startSec);
   const [end, setEnd] = useState(clip.endSec);
   const [showPublish, setShowPublish] = useState(false);
+  const toast = useToast();
 
   const isProcessing = clip.status === "PENDING" || clip.status === "RENDERING";
 
@@ -22,7 +32,7 @@ export function ClipCard({ clip, onChange }: { clip: ClipDTO; onChange: () => vo
       await fn();
       onChange();
     } catch (err) {
-      alert(err instanceof Error ? err.message : "Action failed");
+      toast.error(err instanceof Error ? err.message : "Action failed");
     } finally {
       setBusy(null);
     }
@@ -40,7 +50,8 @@ export function ClipCard({ clip, onChange }: { clip: ClipDTO; onChange: () => vo
             src={clip.videoUrl}
             poster={clip.thumbnailUrl ?? undefined}
             controls
-            preload="none"
+            playsInline
+            preload="metadata"
             className="h-full w-full object-contain"
           />
         ) : (
@@ -56,11 +67,29 @@ export function ClipCard({ clip, onChange }: { clip: ClipDTO; onChange: () => vo
           </div>
         )}
         <div className="absolute left-2 top-2 flex gap-1.5">
+          {clipMode === "FULL" && clip.order != null && (
+            <span className="badge bg-brand-gradient font-semibold text-white shadow-glow-sm">
+              Part {clip.order}
+            </span>
+          )}
           <ScoreBadge score={clip.viralScore} />
         </div>
         <div className="absolute right-2 top-2">
           <span className="badge bg-black/60 text-white">{formatDuration(clip.durationSec)}</span>
         </div>
+        {clip.publishedPlatforms.length > 0 && (
+          <div className="absolute bottom-2 left-2 flex gap-1">
+            {clip.publishedPlatforms.map((p) => (
+              <span
+                key={p}
+                title={`Published to ${PLATFORM_META[p]?.label ?? p}`}
+                className="flex h-6 w-6 items-center justify-center rounded-full bg-black/75 text-xs ring-1 ring-emerald-400/60"
+              >
+                {PLATFORM_META[p]?.icon}
+              </span>
+            ))}
+          </div>
+        )}
       </div>
 
       <div className="space-y-3 p-3">
@@ -127,23 +156,6 @@ export function ClipCard({ clip, onChange }: { clip: ClipDTO; onChange: () => vo
           </div>
         ) : (
           <>
-            <div className="flex gap-2">
-              <button
-                className={`flex-1 text-xs ${clip.status === "APPROVED" ? "btn-primary" : "btn-secondary"}`}
-                disabled={!!busy || isProcessing}
-                onClick={() => act("approve", () => patch({ status: "APPROVED" }))}
-              >
-                {clip.status === "APPROVED" ? "✓ Approved" : "Approve"}
-              </button>
-              <button
-                className="btn-secondary text-xs"
-                disabled={!!busy || isProcessing}
-                onClick={() => act("reject", () => patch({ status: "REJECTED" }))}
-              >
-                Reject
-              </button>
-            </div>
-
             <div className="flex flex-wrap gap-1.5 text-xs">
               <button
                 className="btn-ghost px-2 py-1 text-xs"

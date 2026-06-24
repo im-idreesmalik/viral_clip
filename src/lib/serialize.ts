@@ -5,8 +5,9 @@
  * storage keys into public media URLs. Sensitive fields (token ciphertext)
  * are never included.
  */
-import type { Video, Clip, SocialAccount, Publication, AutoPublishConfig } from "@prisma/client";
+import type { Video, Clip, ClipMode, SocialAccount, Publication, AutoPublishConfig } from "@prisma/client";
 import { publicUrl } from "./storage";
+import { composeCaption } from "./caption";
 
 export function serializeVideo(v: Video & { clips?: Clip[] }) {
   return {
@@ -26,15 +27,35 @@ export function serializeVideo(v: Video & { clips?: Clip[] }) {
     sizeBytes: v.sizeBytes != null ? Number(v.sizeBytes) : null,
     thumbnailUrl: publicUrl(v.thumbnailKey),
     sourceMediaUrl: publicUrl(v.storageKey),
+    hashtags: v.hashtags,
     errorMessage: v.errorMessage,
     createdAt: v.createdAt.toISOString(),
     updatedAt: v.updatedAt.toISOString(),
-    clips: v.clips ? v.clips.map(serializeClip) : undefined,
+    clips: v.clips
+      ? v.clips.map((c) =>
+          serializeClip(c, { videoTitle: v.title, hashtags: v.hashtags, clipMode: v.clipMode }),
+        )
+      : undefined,
     clipCount: v.clips ? v.clips.length : undefined,
   };
 }
 
-export function serializeClip(c: Clip) {
+export function serializeClip(
+  c: Clip & { publications?: Pick<Publication, "platform" | "status">[] },
+  ctx?: { videoTitle: string; hashtags: string | null; clipMode: ClipMode },
+) {
+  const publishedPlatforms = Array.from(
+    new Set((c.publications ?? []).filter((p) => p.status === "PUBLISHED").map((p) => p.platform)),
+  );
+  const composedCaption = ctx
+    ? composeCaption({
+        videoTitle: ctx.videoTitle,
+        hashtags: ctx.hashtags,
+        clipMode: ctx.clipMode,
+        order: c.order,
+        clipTitle: c.title,
+      })
+    : c.title;
   return {
     id: c.id,
     videoId: c.videoId,
@@ -51,6 +72,8 @@ export function serializeClip(c: Clip) {
     thumbnailUrl: publicUrl(c.thumbnailKey),
     captionsUrl: publicUrl(c.captionsKey),
     errorMessage: c.errorMessage,
+    publishedPlatforms,
+    composedCaption,
     createdAt: c.createdAt.toISOString(),
     updatedAt: c.updatedAt.toISOString(),
   };

@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/auth";
 import { Sidebar } from "@/components/dashboard/Sidebar";
+import { ToastProvider } from "@/components/ui/Toast";
 
 export const dynamic = "force-dynamic";
 
@@ -9,11 +10,13 @@ export default async function DashboardLayout({ children }: { children: React.Re
   if (!user) redirect("/login");
 
   return (
-    <div className="flex min-h-screen">
-      <Sidebar user={{ name: user.name, email: user.email }} />
-      <main className="flex-1 overflow-x-hidden">
-        <div className="mx-auto max-w-6xl px-6 py-8">{children}</div>
-      </main>
-    </div>
+    <ToastProvider>
+      <div className="md:flex md:min-h-screen">
+        <Sidebar user={{ name: user.name, email: user.email }} />
+        <main className="min-w-0 flex-1 overflow-x-hidden">
+          <div className="mx-auto max-w-6xl px-4 py-6 sm:px-6 sm:py-8 animate-fade-in">{children}</div>
+        </main>
+      </div>
+    </ToastProvider>
   );
 }

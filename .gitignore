@@ -29,6 +29,9 @@ next-env.d.ts
 *.pem
 *.exe
 cloudflared.exe
+
+# local tooling config
+.claude/
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*

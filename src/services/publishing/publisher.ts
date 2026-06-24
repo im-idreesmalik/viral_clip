@@ -12,6 +12,7 @@ import { env } from "@/lib/env";
 import { createLogger } from "@/lib/logger";
 import { decrypt, decryptMaybe, encrypt, encryptMaybe } from "@/lib/crypto";
 import { resolveKey } from "@/lib/storage";
+import { enqueuePublish } from "@/lib/queue";
 import { getProvider, PublishError } from "@/services/social";
 import type { AccountContext } from "@/services/social/types";
 
@@ -91,6 +92,9 @@ export async function executePublication(publicationId: string): Promise<void> {
     });
     await recordLog(publicationId, "info", "Published successfully", result);
     log.info("Publication complete", { publicationId, platform: publication.platform });
+
+    // Sequential "Publish All": kick off the next clip in this batch.
+    await enqueueNextInBatch(publication);
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     const retryable = err instanceof PublishError ? err.retryable : false;
@@ -108,6 +112,43 @@ export async function executePublication(publicationId: string): Promise<void> {
 
     await terminalFail(publicationId, message);
   }
+}
+
+/**
+ * Sequential "Publish All": once a clip in a batch publishes successfully,
+ * enqueue the NEXT clip in that batch (after the configured interval). A
+ * failure never calls this, so the chain halts until the failed clip is retried
+ * — at which point its success resumes the chain from where it stopped.
+ */
+async function enqueueNextInBatch(pub: {
+  batchId: string | null;
+  batchSeq: number | null;
+  batchIntervalMin: number | null;
+}) {
+  if (!pub.batchId || pub.batchSeq == null) return;
+  const next = await prisma.publication.findFirst({
+    where: {
+      batchId: pub.batchId,
+      batchSeq: pub.batchSeq + 1,
+      status: PublicationStatus.SCHEDULED,
+    },
+  });
+  if (!next) return;
+
+  const delayMs = (pub.batchIntervalMin ?? 0) * 60_000;
+  await prisma.publication.update({
+    where: { id: next.id },
+    data:
+      delayMs > 0
+        ? { publishAt: new Date(Date.now() + delayMs) }
+        : { status: PublicationStatus.QUEUED },
+  });
+  await enqueuePublish(next.id, delayMs);
+  log.info("Enqueued next clip in batch", {
+    batchId: pub.batchId,
+    nextSeq: pub.batchSeq + 1,
+    delayMs,
+  });
 }
 
 async function terminalFail(publicationId: string, message: string) {

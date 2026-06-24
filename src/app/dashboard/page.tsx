@@ -6,12 +6,14 @@ import { api, formatDuration } from "@/lib/client";
 import type { VideoDTO } from "@/lib/types";
 import { NewVideoPanel } from "@/components/dashboard/NewVideoPanel";
 import { VideoStatusBadge } from "@/components/dashboard/badges";
+import { useToast } from "@/components/ui/Toast";
 
 const PROCESSING = new Set(["PENDING", "DOWNLOADING", "TRANSCRIBING", "ANALYZING", "GENERATING"]);
 
 export default function VideosPage() {
   const [videos, setVideos] = useState<VideoDTO[]>([]);
   const [loading, setLoading] = useState(true);
+  const toast = useToast();
 
   const load = useCallback(async () => {
     try {
@@ -37,8 +39,13 @@ export default function VideosPage() {
 
   async function remove(id: string) {
     if (!confirm("Delete this video and all its clips?")) return;
-    await api(`/api/videos/${id}`, { method: "DELETE" });
-    load();
+    try {
+      await api(`/api/videos/${id}`, { method: "DELETE" });
+      toast.success("Video deleted");
+      load();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to delete video");
+    }
   }
 
   return (
@@ -50,7 +57,17 @@ export default function VideosPage() {
         </p>
 
         {loading ? (
-          <p className="text-ink-100/50">Loading…</p>
+          <div className="space-y-3">
+            {[0, 1, 2].map((i) => (
+              <div key={i} className="card flex items-center gap-4 p-3">
+                <div className="skeleton h-16 w-28 shrink-0" />
+                <div className="flex-1 space-y-2">
+                  <div className="skeleton h-4 w-1/2" />
+                  <div className="skeleton h-3 w-1/3" />
+                </div>
+              </div>
+            ))}
+          </div>
         ) : videos.length === 0 ? (
           <div className="card flex flex-col items-center justify-center p-12 text-center">
             <div className="mb-3 text-4xl">🎬</div>
@@ -80,7 +97,7 @@ export default function VideosPage() {
 
 function VideoRow({ video, onDelete }: { video: VideoDTO; onDelete: () => void }) {
   return (
-    <div className="card flex items-center gap-4 p-3">
+    <div className="card card-hover flex items-center gap-4 p-3">
       <Link href={`/dashboard/videos/${video.id}`} className="shrink-0">
         <div className="flex h-16 w-28 items-center justify-center overflow-hidden rounded-lg bg-ink-950">
           {video.thumbnailUrl ? (

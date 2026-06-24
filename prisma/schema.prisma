@@ -88,6 +88,8 @@ model Video {
   source    VideoSource
   sourceUrl String? // original YouTube URL, if applicable
   status    VideoStatus @default(PENDING)
+  // Hashtags appended to every clip's caption when publishing (e.g. "#viral #fyp").
+  hashtags  String?
 
   // Clip selection configuration for this video.
   clipMode        ClipMode @default(VIRAL)
@@ -213,6 +215,13 @@ model Publication {
   // Set when auto-scheduled by the AutoPublishConfig engine (vs. manual).
   autoScheduled Boolean @default(false)
 
+  // Sequential "Publish All" batch: clips in a batch post one-by-one — the next
+  // is enqueued only after the previous succeeds. batchSeq is the 0-based order
+  // within the batch; batchIntervalMin is the delay before the next clip.
+  batchId          String?
+  batchSeq         Int?
+  batchIntervalMin Int?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -220,6 +229,7 @@ model Publication {
 
   @@index([userId, status])
   @@index([status, publishAt])
+  @@index([batchId, batchSeq])
 }
 
 model PublicationLog {
