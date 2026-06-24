@@ -1,0 +1,42 @@
+# robots.txt for ViralCut.
+#
+# We keep blocking AI training/scraping crawlers (the same set Cloudflare's
+# managed robots.txt blocks) but intentionally ALLOW Meta's crawler
+# (meta-externalagent): Facebook and Instagram use it to fetch a clip's
+# video_url when publishing a Reel. Blocking it breaks publishing with
+# "403 Restricted by robots.txt".
+#
+# IMPORTANT: For this file to actually be served, Cloudflare's managed robots.txt
+# must be turned OFF (Security -> Settings -> "Instruct AI bot traffic with
+# robots.txt"). Otherwise Cloudflare appends its own block that re-disallows
+# meta-externalagent and overrides the line below.
+
+# Allow Meta's media crawler (needed for IG/FB Reels publishing).
+User-agent: meta-externalagent
+Allow: /
+
+# Block AI training / scraping crawlers.
+User-agent: Amazonbot
+Disallow: /
+
+User-agent: Applebot-Extended
+Disallow: /
+
+User-agent: Bytespider
+Disallow: /
+
+User-agent: CCBot
+Disallow: /
+
+User-agent: ClaudeBot
+Disallow: /
+
+User-agent: Google-Extended
+Disallow: /
+
+User-agent: GPTBot
+Disallow: /
+
+# Everyone else is allowed.
+User-agent: *
+Allow: /

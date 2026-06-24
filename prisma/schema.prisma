@@ -1,0 +1,259 @@
+// ViralCut data model
+// PostgreSQL + Prisma. Run `npm run prisma:migrate` after editing.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ---------------------------------------------------------------------------
+// Enums
+// ---------------------------------------------------------------------------
+
+enum VideoSource {
+  YOUTUBE
+  UPLOAD
+}
+
+enum VideoStatus {
+  PENDING // created, not yet processing
+  DOWNLOADING // fetching source (YouTube) or finalizing upload
+  TRANSCRIBING // speech-to-text in progress
+  ANALYZING // AI clip detection in progress
+  GENERATING // rendering clips
+  READY // all clips generated
+  FAILED
+}
+
+// How clips should be selected from the source video.
+enum ClipMode {
+  VIRAL // AI extracts highest-confidence viral moments above a threshold
+  FULL // sequential segmentation of the entire video ("Part 1", "Part 2", ...)
+}
+
+enum ClipStatus {
+  PENDING // detected, queued for rendering
+  RENDERING // FFmpeg in progress
+  READY // rendered, awaiting user review
+  APPROVED // user approved (eligible for auto-publishing)
+  REJECTED // user rejected
+  FAILED
+}
+
+enum Platform {
+  TIKTOK
+  INSTAGRAM
+  FACEBOOK
+  YOUTUBE
+}
+
+enum PublicationStatus {
+  SCHEDULED // has a future publishAt
+  QUEUED // handed to the publish worker
+  PUBLISHING // upload in progress
+  PUBLISHED // live on platform
+  FAILED
+  CANCELLED
+}
+
+// ---------------------------------------------------------------------------
+// Models
+// ---------------------------------------------------------------------------
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String
+  name         String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  videos         Video[]
+  socialAccounts SocialAccount[]
+  schedule       AutoPublishConfig?
+  publications   Publication[]
+
+  @@index([email])
+}
+
+model Video {
+  id        String      @id @default(cuid())
+  userId    String
+  user      User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title     String
+  source    VideoSource
+  sourceUrl String? // original YouTube URL, if applicable
+  status    VideoStatus @default(PENDING)
+
+  // Clip selection configuration for this video.
+  clipMode        ClipMode @default(VIRAL)
+  viralThreshold  Int      @default(70) // 0-100; min confidence for VIRAL mode
+  segmentSeconds  Int      @default(45) // target clip length for FULL mode
+  targetClipCount Int      @default(8) // soft cap on clips (VIRAL mode only)
+  burnCaptions    Boolean  @default(true) // generate + burn in subtitles
+
+  // Source media metadata.
+  storageKey   String? // path within STORAGE_DIR to the downloaded/uploaded source
+  durationSec  Float?
+  width        Int?
+  height       Int?
+  sizeBytes    BigInt?
+  thumbnailKey String?
+
+  // Transcript (word-level segments) cached as JSON for re-analysis.
+  transcript Json?
+
+  errorMessage String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  clips Clip[]
+
+  @@index([userId, createdAt])
+  @@index([status])
+}
+
+model Clip {
+  id      String @id @default(cuid())
+  videoId String
+  video   Video  @relation(fields: [videoId], references: [id], onDelete: Cascade)
+
+  title      String
+  // Position within the source video.
+  startSec   Float
+  endSec     Float
+  // AI viral confidence score, 0-100. Null for FULL-mode sequential clips.
+  viralScore Int?
+  // AI rationale / hook description, useful for captions + the dashboard.
+  reason     String?
+  // For FULL mode: 1-based sequence index ("Part {order}").
+  order      Int?
+
+  status ClipStatus @default(PENDING)
+
+  // Rendered output (9:16, captioned).
+  storageKey   String?
+  thumbnailKey String?
+  captionsKey  String? // generated .srt/.ass file
+  durationSec  Float?
+  width        Int?
+  height       Int?
+
+  // Caption text (transcript window) rendered onto the clip.
+  captionText String?
+
+  errorMessage String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  publications Publication[]
+
+  @@index([videoId, status])
+  @@index([startSec])
+}
+
+model SocialAccount {
+  id       String   @id @default(cuid())
+  userId   String
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  platform Platform
+
+  // Platform-side identity.
+  externalId  String // user/channel/page id on the platform
+  displayName String?
+  username    String?
+  avatarUrl   String?
+
+  // Encrypted OAuth credentials (see lib/crypto.ts). Never stored in plaintext.
+  accessTokenEnc  String
+  refreshTokenEnc String?
+  scope           String?
+  tokenExpiresAt  DateTime?
+
+  // Extra platform metadata (e.g. IG business account id, FB page id, token).
+  meta Json?
+
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  publications Publication[]
+
+  @@unique([userId, platform, externalId])
+  @@index([userId, platform])
+}
+
+model Publication {
+  id              String        @id @default(cuid())
+  userId          String
+  user            User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  clipId          String
+  clip            Clip          @relation(fields: [clipId], references: [id], onDelete: Cascade)
+  socialAccountId String
+  socialAccount   SocialAccount @relation(fields: [socialAccountId], references: [id], onDelete: Cascade)
+  platform        Platform
+
+  caption String?
+
+  status     PublicationStatus @default(SCHEDULED)
+  // When this clip should go live. Null = publish immediately when queued.
+  publishAt  DateTime?
+  publishedAt DateTime?
+
+  // Result + retry bookkeeping.
+  externalPostId  String? // platform post id once published
+  externalUrl     String?
+  attempts        Int       @default(0)
+  lastError       String?
+
+  // Set when auto-scheduled by the AutoPublishConfig engine (vs. manual).
+  autoScheduled Boolean @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  logs PublicationLog[]
+
+  @@index([userId, status])
+  @@index([status, publishAt])
+}
+
+model PublicationLog {
+  id            String      @id @default(cuid())
+  publicationId String
+  publication   Publication @relation(fields: [publicationId], references: [id], onDelete: Cascade)
+  level         String      @default("info") // info | warn | error
+  message       String
+  data          Json?
+  createdAt     DateTime    @default(now())
+
+  @@index([publicationId, createdAt])
+}
+
+// Per-user auto-publishing configuration. The scheduler enqueues approved,
+// unpublished clips at the configured cadence across selected platforms.
+model AutoPublishConfig {
+  id     String @id @default(cuid())
+  userId String @unique
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  enabled        Boolean    @default(false)
+  // Interval between posts, in minutes (e.g. 120 = every 2 hours).
+  intervalMinutes Int       @default(120)
+  // Platforms to auto-publish approved clips to.
+  platforms      Platform[] @default([])
+  // Don't post outside this daily window (local hour, 0-23). Null = anytime.
+  windowStartHour Int?
+  windowEndHour   Int?
+
+  // Bookkeeping for the scheduler.
+  lastScheduledAt DateTime?
+  nextRunAt       DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
