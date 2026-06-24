@@ -12,6 +12,7 @@ import path from "node:path";
 import { ClipMode, VideoStatus, ClipStatus, VideoSource } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { createLogger } from "@/lib/logger";
+import { env } from "@/lib/env";
 import { resolveKey, ensureDirFor, writeFile, deleteKey } from "@/lib/storage";
 import { probe, renderClip, captureThumbnail } from "./ffmpeg";
 import { downloadVideo } from "./download";
@@ -64,14 +65,18 @@ export async function processVideo(videoId: string): Promise<void> {
       },
     });
 
-    // 2. Transcribe (best-effort; null if disabled/failed).
+    // 2. Transcribe — reuse a cached transcript (e.g. on reprocess) to skip the
+    //    expensive re-run; otherwise transcribe once and cache it. Best-effort.
     await setStatus(videoId, VideoStatus.TRANSCRIBING);
-    const transcript = await transcribe(sourcePath);
-    if (transcript) {
-      await prisma.video.update({
-        where: { id: videoId },
-        data: { transcript: transcript as unknown as object },
-      });
+    let transcript = (video.transcript as unknown as Transcript | null) ?? null;
+    if (!transcript) {
+      transcript = await transcribe(sourcePath);
+      if (transcript) {
+        await prisma.video.update({
+          where: { id: videoId },
+          data: { transcript: transcript as unknown as object },
+        });
+      }
     }
 
     // 3. Determine clips.
@@ -105,12 +110,19 @@ export async function processVideo(videoId: string): Promise<void> {
       ),
     );
 
-    // 4. Render each clip.
+    // 4. Render clips — a few at a time so the CPU filters and the GPU encoder
+    //    work in parallel instead of one clip blocking the next.
     await setStatus(videoId, VideoStatus.GENERATING);
-    for (const clip of createdClips) {
-      await renderClipRecord(clip.id).catch((err) => {
-        log.error("Clip render failed", { clipId: clip.id, message: err.message });
-      });
+    const concurrency = Math.max(1, env.clipRenderConcurrency);
+    for (let i = 0; i < createdClips.length; i += concurrency) {
+      const batch = createdClips.slice(i, i + concurrency);
+      await Promise.all(
+        batch.map((clip) =>
+          renderClipRecord(clip.id).catch((err) => {
+            log.error("Clip render failed", { clipId: clip.id, message: err.message });
+          }),
+        ),
+      );
     }
 
     await setStatus(videoId, VideoStatus.READY);
@@ -218,6 +230,8 @@ export async function renderClipRecord(clipId: string): Promise<void> {
       startSec: clip.startSec,
       endSec: clip.endSec,
       subtitlePath,
+      partLabel:
+        clip.video.clipMode === "FULL" && clip.order != null ? `Part ${clip.order}` : undefined,
       vertical: true,
     });
 

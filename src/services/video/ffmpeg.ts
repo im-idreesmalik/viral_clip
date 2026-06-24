@@ -6,6 +6,7 @@
  * bundled ffmpeg-static / ffprobe-static packages so the app works without a
  * system install. All outputs target social-platform-friendly H.264/AAC MP4.
  */
+import fs from "node:fs";
 import path from "node:path";
 import ffmpeg from "fluent-ffmpeg";
 import ffmpegStatic from "ffmpeg-static";
@@ -138,6 +139,8 @@ export interface RenderClipOptions {
   endSec: number;
   /** Path to a subtitle file (.ass or .srt) to burn in. Optional. */
   subtitlePath?: string;
+  /** Text burned into the top band of the vertical frame (e.g. "Part 3"). */
+  partLabel?: string;
   /** Convert to vertical 9:16 with a blurred background fill. Default true. */
   vertical?: boolean;
   onProgress?: (percent: number) => void;
@@ -149,22 +152,46 @@ export interface RenderClipOptions {
  * fit) composited on top — the standard "Reels" look that never letterboxes
  * awkwardly. Subtitles, if provided, are burned on last.
  */
-function buildVerticalFilter(subtitlePath?: string): string {
+function buildVerticalFilter(opts: { subtitlePath?: string; partLabel?: string }): string {
   const W = VERTICAL_WIDTH;
   const H = VERTICAL_HEIGHT;
   // [bg]: cover-scale + crop + blur. [fg]: contain-scale. overlay centered.
   const chain = [
     `[0:v]split=2[bg][fg]`,
-    `[bg]scale=${W}:${H}:force_original_aspect_ratio=increase,crop=${W}:${H},boxblur=40:2,setsar=1[bgblur]`,
+    // Blur cheaply: cover-scale to a SMALL frame, blur that, then upscale to
+    // full size (the upscale smooths it further). Far faster than boxblur at
+    // 1080x1920 — blurring the small frame is ~9x less work per frame.
+    `[bg]scale=360:640:force_original_aspect_ratio=increase,crop=360:640,boxblur=14:1,scale=${W}:${H}:flags=bilinear,setsar=1[bgblur]`,
     `[fg]scale=${W}:${H}:force_original_aspect_ratio=decrease,setsar=1[fgscaled]`,
     `[bgblur][fgscaled]overlay=(W-w)/2:(H-h)/2[outv]`,
   ];
   let lastLabel = "outv";
-  if (subtitlePath) {
-    chain.push(`[${lastLabel}]${subtitleFilterArg(subtitlePath)}[final]`);
-    lastLabel = "final";
+  if (opts.subtitlePath) {
+    chain.push(`[${lastLabel}]${subtitleFilterArg(opts.subtitlePath)}[subbed]`);
+    lastLabel = "subbed";
+  }
+  if (opts.partLabel) {
+    chain.push(`[${lastLabel}]${drawTextArg(opts.partLabel)}[titled]`);
+    lastLabel = "titled";
   }
   return chain.join(";") + `;[${lastLabel}]null[v]`;
+}
+
+/**
+ * Build a `drawtext=...` token that burns a title (e.g. "Part 3") into the top
+ * band of the vertical frame. The font path's drive colon is escaped for the
+ * filtergraph (same Windows pitfall as subtitles).
+ */
+function drawTextArg(label: string): string {
+  const fontPath = (env.fontFile || "C:/Windows/Fonts/arialbd.ttf")
+    .replace(/\\/g, "/")
+    .replace(":", "\\:");
+  const text = label.replace(/\\/g, "\\\\").replace(/:/g, "\\:").replace(/'/g, "’");
+  return (
+    `drawtext=fontfile='${fontPath}':text='${text}':` +
+    `fontsize=100:fontcolor=white:borderw=6:bordercolor=black@0.85:` +
+    `x=(w-text_w)/2:y=h*0.10`
+  );
 }
 
 /**
@@ -193,8 +220,43 @@ function subtitleFilterArg(subtitlePath: string): string {
 // EBU R128 loudness normalization target (a good level for social platforms).
 const LOUDNORM = "loudnorm=I=-16:TP=-1.5:LRA=11";
 
+// Output options shared by every encoder.
+const COMMON_OUTPUT = [
+  "-pix_fmt", "yuv420p",
+  "-profile:v", "high",
+  "-movflags", "+faststart",
+  "-r", "30",
+  "-b:a", "128k",
+  "-ar", "44100",
+  "-shortest",
+];
+
+/**
+ * Apply the chosen H.264 encoder. "h264_nvenc" offloads encoding to an NVIDIA
+ * GPU (much faster); anything else uses the libx264 CPU encoder.
+ */
+function applyEncoder(command: ReturnType<typeof ffmpeg>, encoder: string) {
+  command.audioCodec("aac");
+  if (encoder === "h264_nvenc") {
+    command.videoCodec("h264_nvenc").outputOptions([
+      "-preset", "p5", // p1 fastest … p7 slowest; p5 = good quality/speed balance
+      "-rc", "vbr",
+      "-cq", "23", // constant-quality, roughly equivalent to libx264 -crf 23
+      "-b:v", "0",
+      ...COMMON_OUTPUT,
+    ]);
+  } else {
+    command.videoCodec("libx264").outputOptions([
+      "-preset", "veryfast",
+      "-crf", "23",
+      "-level", "4.0",
+      ...COMMON_OUTPUT,
+    ]);
+  }
+}
+
 export async function renderClip(opts: RenderClipOptions): Promise<void> {
-  const { input, output, startSec, endSec, subtitlePath, vertical = true, onProgress } = opts;
+  const { input, output, startSec, endSec, subtitlePath, partLabel, vertical = true, onProgress } = opts;
   const duration = Math.max(0.1, endSec - startSec);
 
   // Detect audio up front so we only build the audio chain when there's a
@@ -202,49 +264,61 @@ export async function renderClip(opts: RenderClipOptions): Promise<void> {
   const meta = await probe(input).catch(() => null);
   const hasAudio = meta?.hasAudio ?? true;
 
-  return new Promise((resolve, reject) => {
-    const command = ffmpeg(input)
-      // Accurate seek: place -ss after input for frame-accurate trims.
-      .seekInput(startSec)
-      .duration(duration);
+  // Only burn the "Part N" title if the font is available — otherwise skip it
+  // rather than fail the whole render.
+  const titleLabel =
+    partLabel && fs.existsSync(env.fontFile || "C:/Windows/Fonts/arialbd.ttf") ? partLabel : undefined;
+  if (partLabel && !titleLabel) {
+    log.warn("Title font not found; skipping burned-in part label", { font: env.fontFile });
+  }
 
-    if (vertical) {
-      let filter = buildVerticalFilter(subtitlePath);
-      // Pass the filtergraph only (no auto-map) and map the outputs ourselves —
-      // letting complexFilter also add `-map [v]` would map the label twice.
-      const maps = ["-map", "[v]"];
-      if (hasAudio) {
-        filter += `;[0:a]${LOUDNORM}[aout]`;
-        maps.push("-map", "[aout]");
+  const runRender = (encoder: string): Promise<void> =>
+    new Promise((resolve, reject) => {
+      const command = ffmpeg(input)
+        // Accurate seek: place -ss after input for frame-accurate trims.
+        .seekInput(startSec)
+        .duration(duration);
+
+      if (vertical) {
+        let filter = buildVerticalFilter({ subtitlePath, partLabel: titleLabel });
+        // Pass the filtergraph only (no auto-map) and map the outputs ourselves —
+        // letting complexFilter also add `-map [v]` would map the label twice.
+        const maps = ["-map", "[v]"];
+        if (hasAudio) {
+          filter += `;[0:a]${LOUDNORM}[aout]`;
+          maps.push("-map", "[aout]");
+        }
+        command.complexFilter(filter);
+        command.outputOptions(maps);
+      } else {
+        if (subtitlePath) command.videoFilters(subtitleFilterArg(subtitlePath));
+        if (hasAudio) command.audioFilters(LOUDNORM);
       }
-      command.complexFilter(filter);
-      command.outputOptions(maps);
-    } else {
-      if (subtitlePath) command.videoFilters(subtitleFilterArg(subtitlePath));
-      if (hasAudio) command.audioFilters(LOUDNORM);
-    }
 
-    command
-      .videoCodec("libx264")
-      .audioCodec("aac")
-      .outputOptions([
-        "-preset", "veryfast",
-        "-crf", "23",
-        "-pix_fmt", "yuv420p",
-        "-profile:v", "high",
-        "-level", "4.0",
-        "-movflags", "+faststart",
-        "-r", "30",
-        "-b:a", "128k",
-        "-ar", "44100",
-        "-shortest",
-      ])
-      .on("start", (cmd) => log.debug("render start", { cmd }))
-      .on("progress", (p) => onProgress?.(Math.min(100, Math.round(p.percent ?? 0))))
-      .on("error", (err) => reject(new Error(`FFmpeg render failed: ${err.message}`)))
-      .on("end", () => resolve())
-      .save(output);
-  });
+      applyEncoder(command, encoder);
+
+      command
+        .on("start", (cmd) => log.debug("render start", { encoder, cmd }))
+        .on("progress", (p) => onProgress?.(Math.min(100, Math.round(p.percent ?? 0))))
+        .on("error", (err) => reject(new Error(`FFmpeg render failed (${encoder}): ${err.message}`)))
+        .on("end", () => resolve())
+        .save(output);
+    });
+
+  const preferred = env.ffmpegVideoEncoder || "libx264";
+  try {
+    await runRender(preferred);
+  } catch (err) {
+    // A GPU encoder can fail (GPU busy, driver/codec issue) — fall back to CPU.
+    if (preferred !== "libx264") {
+      log.warn(`Render failed on "${preferred}"; retrying with libx264 (CPU)`, {
+        message: err instanceof Error ? err.message : String(err),
+      });
+      await runRender("libx264");
+    } else {
+      throw err;
+    }
+  }
 }
 
 /** Capture a single-frame JPEG thumbnail at the given timestamp. */

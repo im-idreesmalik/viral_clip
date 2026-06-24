@@ -40,6 +40,12 @@ export const env = {
   ffmpegPath: process.env.FFMPEG_PATH || "",
   ffprobePath: process.env.FFPROBE_PATH || "",
   ytdlpPath: process.env.YTDLP_PATH || "",
+  // H.264 encoder for clip rendering: "h264_nvenc" (NVIDIA GPU) or "libx264"
+  // (CPU). Falls back to libx264 automatically if the GPU encoder fails.
+  ffmpegVideoEncoder: process.env.FFMPEG_VIDEO_ENCODER || "libx264",
+  // Font used to burn the "Part N" title into clips (drawtext). Defaults to
+  // Windows Arial Bold; override with FONT_FILE.
+  fontFile: process.env.FONT_FILE || "C:/Windows/Fonts/arialbd.ttf",
 
   // AI clip detection provider: "ollama" (local, free) or "anthropic" (cloud).
   aiProvider: (process.env.AI_PROVIDER || "ollama") as "ollama" | "anthropic",
@@ -81,6 +87,8 @@ export const env = {
 
   videoWorkerConcurrency: Number(process.env.VIDEO_WORKER_CONCURRENCY || 1),
   publishWorkerConcurrency: Number(process.env.PUBLISH_WORKER_CONCURRENCY || 2),
+  // How many clips to render in parallel within one video job (CPU + GPU bound).
+  clipRenderConcurrency: Number(process.env.CLIP_RENDER_CONCURRENCY || 3),
 
   social: {
     youtube: {

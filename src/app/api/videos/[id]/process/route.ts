@@ -27,8 +27,8 @@ export const POST = handler(async (req, ctx: Ctx) => {
   const video = await prisma.video.findFirst({ where: { id, userId: session.sub } });
   if (!video) throw new ApiError(404, "Video not found");
 
-  if (video.status === VideoStatus.DOWNLOADING || video.status === VideoStatus.GENERATING) {
-    throw new ApiError(409, "Video is already being processed.");
+  if (video.status === VideoStatus.DOWNLOADING) {
+    throw new ApiError(409, "Video is still downloading; try again in a moment.");
   }
 
   const overrides = await req.json().then((j) => schema.parse(j)).catch(() => undefined);
