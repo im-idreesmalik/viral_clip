@@ -1,9 +1,18 @@
 "use client";
 
-import Link from "next/link";
+import Link, { useLinkStatus } from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useState } from "react";
 import clsx from "clsx";
+
+/** Spinner shown on a nav item while its route is loading (Next useLinkStatus). */
+function NavSpinner() {
+  const { pending } = useLinkStatus();
+  if (!pending) return null;
+  return (
+    <span className="ml-auto h-3.5 w-3.5 shrink-0 animate-spin rounded-full border-2 border-ink-500 border-t-brand-300" />
+  );
+}
 
 const NAV = [
   { href: "/dashboard", label: "Videos", icon: "🎬", exact: true },
@@ -57,6 +66,7 @@ export function Sidebar({ user }: { user: { name: string | null; email: string }
               {item.icon}
             </span>
             {item.label}
+            <NavSpinner />
           </Link>
         );
       })}

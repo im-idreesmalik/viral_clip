@@ -7,6 +7,9 @@
  */
 import "./loadEnv";
 
+import { VideoStatus, ClipStatus } from "@prisma/client";
+import { prisma } from "@/lib/db";
+import { env } from "@/lib/env";
 import { ensureStorageRoot } from "@/lib/storage";
 import { createLogger } from "@/lib/logger";
 import { startVideoWorker } from "./videoProcessor";
@@ -16,6 +19,42 @@ import { runScheduler } from "./scheduler";
 const log = createLogger("worker");
 
 const SCHEDULER_INTERVAL_MS = 60_000;
+
+// Video statuses that mean "work in progress".
+const PROCESSING_STATUSES: VideoStatus[] = [
+  VideoStatus.DOWNLOADING,
+  VideoStatus.TRANSCRIBING,
+  VideoStatus.ANALYZING,
+  VideoStatus.GENERATING,
+];
+
+/**
+ * Fail any video/clip that has been "in progress" longer than the stale
+ * threshold — i.e. no worker has touched it (e.g. after a crash or a killed
+ * job). This stops the dashboard from spinning forever and frees the user to
+ * retry, without touching jobs that are still actively progressing.
+ */
+async function reapStuckJobs() {
+  const cutoff = new Date(Date.now() - env.staleJobMs);
+  try {
+    const videos = await prisma.video.updateMany({
+      where: { status: { in: PROCESSING_STATUSES }, updatedAt: { lt: cutoff } },
+      data: {
+        status: VideoStatus.FAILED,
+        errorMessage: "Processing stalled and was terminated to protect the system. Please retry.",
+      },
+    });
+    const clips = await prisma.clip.updateMany({
+      where: { status: ClipStatus.RENDERING, updatedAt: { lt: cutoff } },
+      data: { status: ClipStatus.FAILED, errorMessage: "Render stalled and was terminated." },
+    });
+    if (videos.count || clips.count) {
+      log.warn("Reaped stuck jobs", { videos: videos.count, clips: clips.count });
+    }
+  } catch (err) {
+    log.error("Reaper failed", { message: err instanceof Error ? err.message : String(err) });
+  }
+}
 
 async function main() {
   ensureStorageRoot();
@@ -27,7 +66,7 @@ async function main() {
     queues: ["video-processing", "publishing"],
   });
 
-  // Auto-publish scheduler loop.
+  // Auto-publish scheduler loop + stuck-job reaper, on the same tick.
   const tick = async () => {
     try {
       await runScheduler();
@@ -36,6 +75,7 @@ async function main() {
         message: err instanceof Error ? err.message : String(err),
       });
     }
+    await reapStuckJobs();
   };
   await tick();
   const schedulerTimer = setInterval(tick, SCHEDULER_INTERVAL_MS);

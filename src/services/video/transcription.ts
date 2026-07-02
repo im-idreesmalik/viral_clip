@@ -13,7 +13,7 @@
 import os from "node:os";
 import path from "node:path";
 import fsp from "node:fs/promises";
-import { execFile } from "node:child_process";
+import { execFile, spawn } from "node:child_process";
 import { promisify } from "node:util";
 import { env } from "@/lib/env";
 import { createLogger } from "@/lib/logger";
@@ -102,7 +102,103 @@ interface AsrChunk {
   timestamp: [number, number | null];
 }
 
-async function transcribeTransformers(videoPath: string): Promise<Transcript> {
+/**
+ * Transcribe with the local Whisper (transformers/ONNX) model, but run the
+ * actual inference in an ISOLATED child process. The DirectML/CUDA GPU
+ * backends can crash onnxruntime natively (segfault) — which no try/catch can
+ * recover from — so isolating it means a crash or a hang only fails this one
+ * job (and we fall back to CPU, then to no-transcript) instead of taking down
+ * the whole worker. Returns null if every attempt fails.
+ */
+async function transcribeTransformers(videoPath: string): Promise<Transcript | null> {
+  // 1. Try the configured device (may be the GPU) in a subprocess.
+  let transcript = await transcribeViaSubprocess(videoPath, null);
+  if (transcript) return transcript;
+
+  // 2. If that crashed/timed out and it wasn't already CPU, retry on CPU —
+  //    slower, but stable.
+  if (env.transformersDevice !== "cpu") {
+    log.warn("GPU transcription subprocess failed; retrying on CPU (slower but stable).");
+    transcript = await transcribeViaSubprocess(videoPath, {
+      TRANSFORMERS_DEVICE: "cpu",
+      TRANSFORMERS_DTYPE: "q8",
+    });
+    if (transcript) return transcript;
+  }
+
+  log.error("All transcription attempts failed; continuing without a transcript.");
+  return null;
+}
+
+/**
+ * Spawn `node --import tsx transcribe-runner.ts <video> <out>` and wait for it,
+ * enforcing a hard timeout (the child is SIGKILLed if exceeded). Any non-zero
+ * exit, spawn error, timeout, or unreadable output resolves to null.
+ */
+function transcribeViaSubprocess(
+  videoPath: string,
+  envOverride: Record<string, string> | null,
+): Promise<Transcript | null> {
+  const outPath = path.join(os.tmpdir(), `vc-transcript-${Date.now()}-${process.pid}.json`);
+  const runner = path.resolve(process.cwd(), "src/services/video/transcribe-runner.ts");
+  const timeoutMs = env.transcribeTimeoutMs;
+
+  return new Promise((resolve) => {
+    const child = spawn(process.execPath, ["--import", "tsx", runner, videoPath, outPath], {
+      env: { ...process.env, ...(envOverride ?? {}) },
+      stdio: ["ignore", "inherit", "inherit"],
+    });
+
+    let settled = false;
+    const finish = async (result: Transcript | null) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      await fsp.rm(outPath, { force: true }).catch(() => undefined);
+      resolve(result);
+    };
+
+    const timer = setTimeout(() => {
+      log.error("Transcription timed out; terminating subprocess", { timeoutMs });
+      try {
+        child.kill("SIGKILL");
+      } catch {
+        /* already gone */
+      }
+      void finish(null);
+    }, timeoutMs);
+
+    child.on("error", (err) => {
+      log.error("Failed to spawn transcription subprocess", { message: err.message });
+      void finish(null);
+    });
+
+    child.on("exit", async (code, signal) => {
+      if (settled) return;
+      if (code === 0) {
+        try {
+          const raw = await fsp.readFile(outPath, "utf8");
+          const parsed = JSON.parse(raw) as Transcript | null;
+          void finish(parsed && parsed.words?.length ? parsed : null);
+          return;
+        } catch (err) {
+          log.error("Transcription output unreadable", {
+            message: err instanceof Error ? err.message : String(err),
+          });
+        }
+      } else {
+        log.error("Transcription subprocess crashed/failed", { code, signal });
+      }
+      void finish(null);
+    });
+  });
+}
+
+/**
+ * The actual in-process ONNX inference. Exported so the isolated runner
+ * (transcribe-runner.ts) can call it directly without re-spawning.
+ */
+export async function runTransformersInProcess(videoPath: string): Promise<Transcript> {
   const audio = await extractPcmF32(videoPath);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const transcriber = (await getAsrPipeline()) as any;

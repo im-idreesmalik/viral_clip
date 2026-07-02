@@ -90,6 +90,16 @@ export const env = {
   // How many clips to render in parallel within one video job (CPU + GPU bound).
   clipRenderConcurrency: Number(process.env.CLIP_RENDER_CONCURRENCY || 3),
 
+  // --- Safety limits: terminate runaway/stuck work so it can't peg the CPU/GPU
+  //     or hang forever. All in milliseconds. ---
+  // Max time for a single clip render before its ffmpeg process is killed.
+  renderTimeoutMs: Number(process.env.RENDER_TIMEOUT_MS || 15 * 60 * 1000),
+  // Max time for the (isolated) transcription subprocess before it's killed.
+  transcribeTimeoutMs: Number(process.env.TRANSCRIBE_TIMEOUT_MS || 20 * 60 * 1000),
+  // A video left in a processing state longer than this (no worker touching it,
+  // e.g. after a crash) is marked FAILED by the reaper so it stops spinning.
+  staleJobMs: Number(process.env.STALE_JOB_MS || 30 * 60 * 1000),
+
   social: {
     youtube: {
       clientId: process.env.YOUTUBE_CLIENT_ID || "",

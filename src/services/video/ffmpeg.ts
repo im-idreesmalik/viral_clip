@@ -340,11 +340,32 @@ export async function renderClip(opts: RenderClipOptions): Promise<void> {
 
       applyEncoder(command, encoder);
 
+      // Hard timeout: kill a stuck/runaway ffmpeg so it can't peg the CPU/GPU
+      // forever. Cleared on normal end/error.
+      let timedOut = false;
+      const timer = setTimeout(() => {
+        timedOut = true;
+        log.error("Render timed out; killing ffmpeg", { encoder, timeoutMs: env.renderTimeoutMs });
+        try {
+          command.kill("SIGKILL");
+        } catch {
+          /* already gone */
+        }
+        reject(new Error(`FFmpeg render timed out after ${env.renderTimeoutMs}ms (${encoder})`));
+      }, env.renderTimeoutMs);
+
       command
         .on("start", (cmd) => log.debug("render start", { encoder, cmd }))
         .on("progress", (p) => onProgress?.(Math.min(100, Math.round(p.percent ?? 0))))
-        .on("error", (err) => reject(new Error(`FFmpeg render failed (${encoder}): ${err.message}`)))
-        .on("end", () => resolve())
+        .on("error", (err) => {
+          clearTimeout(timer);
+          if (timedOut) return; // already rejected by the timeout
+          reject(new Error(`FFmpeg render failed (${encoder}): ${err.message}`));
+        })
+        .on("end", () => {
+          clearTimeout(timer);
+          resolve();
+        })
         .save(output);
     });
 

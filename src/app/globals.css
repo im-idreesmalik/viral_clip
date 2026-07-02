@@ -104,3 +104,35 @@ body {
     animation: shimmer 1.6s infinite;
   }
 }
+
+/* Indeterminate top progress bar shown during route navigation. */
+@keyframes nav-progress {
+  0% {
+    transform: translateX(-100%);
+    width: 40%;
+  }
+  50% {
+    width: 60%;
+  }
+  100% {
+    transform: translateX(250%);
+    width: 40%;
+  }
+}
+.nav-progress-bar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 60;
+  height: 3px;
+  overflow: hidden;
+  background: rgba(124, 92, 255, 0.15);
+}
+.nav-progress-bar::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, #7c5cff 0%, #22d3ee 100%);
+  animation: nav-progress 1s ease-in-out infinite;
+}
