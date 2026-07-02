@@ -101,7 +101,7 @@ export function PublishDialog({
                 {clip.composedTitle}
               </p>
               <p className="mt-1 text-xs text-ink-400">
-                Auto from the video title + part number — edit the video title to change it.
+                Set from the video title. Edit the video title to change it.
               </p>
             </div>
             <div>

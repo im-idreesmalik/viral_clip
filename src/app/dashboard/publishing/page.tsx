@@ -53,7 +53,7 @@ export default function PublishingPage() {
     <div className="max-w-4xl">
       <h1 className="mb-1 text-2xl font-semibold">Publishing</h1>
       <p className="mb-6 text-sm text-ink-100/60">
-        Every manual and auto-scheduled publish, with status and any errors.
+        Track every clip you&apos;ve published and its status.
       </p>
 
       {loading ? (
@@ -74,7 +74,7 @@ export default function PublishingPage() {
           <div className="mb-3 text-4xl">📡</div>
           <p className="font-medium">Nothing published yet</p>
           <p className="mt-1 text-sm text-ink-100/60">
-            Approve clips and publish them, or enable automation.
+            Publish a clip and it&apos;ll show up here.
           </p>
         </div>
       ) : (

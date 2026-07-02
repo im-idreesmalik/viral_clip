@@ -203,7 +203,7 @@ export function NewVideoPanel({ onCreated }: { onCreated: () => void }) {
           onChange={(e) => setBurnCaptions(e.target.checked)}
           className="h-4 w-4 accent-brand-500"
         />
-        Generate &amp; burn in captions (subtitles)
+        Add captions (subtitles)
       </label>
 
       {clipMode === "FULL" && (

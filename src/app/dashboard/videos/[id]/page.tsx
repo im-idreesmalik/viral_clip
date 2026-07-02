@@ -210,7 +210,7 @@ export default function VideoDetailPage() {
               <span className="mb-3 h-7 w-7 animate-spin rounded-full border-2 border-ink-600 border-t-brand-500" />
               <p className="font-medium">Working on it…</p>
               <p className="mt-1 text-sm text-ink-400">
-                Downloading, transcribing, and detecting clips. This can take a few minutes.
+                Turning your video into clips. This can take a few minutes.
               </p>
             </>
           ) : (

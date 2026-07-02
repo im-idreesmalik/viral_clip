@@ -97,7 +97,7 @@ function ConnectionsContent() {
                     <div>
                       <div className="font-medium">{p.label}</div>
                       <div className="text-xs text-ink-100/50">
-                        {p.configured ? "Ready to connect" : "Not configured on server"}
+                        {p.configured ? "Ready to connect" : "Not available yet"}
                       </div>
                     </div>
                   </div>
@@ -106,7 +106,7 @@ function ConnectionsContent() {
                       + Connect
                     </a>
                   ) : (
-                    <span className="text-xs text-ink-100/40">Set credentials in .env</span>
+                    <span className="text-xs text-ink-100/40">Not available yet</span>
                   )}
                 </div>
 
@@ -134,11 +134,6 @@ function ConnectionsContent() {
         </div>
       )}
 
-      <p className="mt-6 text-xs text-ink-100/40">
-        Each platform requires a registered developer app. See the README for setup. Publishing to
-        Instagram/Facebook Reels also requires your media to be reachable at a public URL
-        (set <code>MEDIA_PUBLIC_BASE</code>).
-      </p>
     </div>
   );
 }

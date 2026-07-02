@@ -114,8 +114,7 @@ export default function SettingsPage() {
             Username
           </label>
           <p className="mb-3 text-xs text-ink-100/55">
-            Burned small onto the bottom-center of every rendered clip, with an <strong>@</strong>{" "}
-            prefix (smaller than the Part number). Leave blank for no watermark.
+            Added as a watermark on every clip you create. Leave blank for none.
           </p>
           <div className="flex items-center gap-2">
             <div className="flex flex-1 items-center rounded-lg border border-ink-700 bg-ink-900 focus-within:border-brand-500">
@@ -141,8 +140,7 @@ export default function SettingsPage() {
       <div>
         <h2 className="mb-1 text-lg font-semibold">Auto-publishing</h2>
         <p className="mb-4 text-sm text-ink-100/60">
-          Auto-publish approved clips on a schedule. The scheduler posts the next approved clip to
-          each selected platform at the chosen interval.
+          Automatically publish your clips on a schedule.
         </p>
 
         <div className="card space-y-6 p-6">
@@ -150,7 +148,7 @@ export default function SettingsPage() {
           <div>
             <div className="font-medium">Enable auto-publishing</div>
             <div className="text-xs text-ink-100/55">
-              When on, approved clips are queued automatically.
+              When on, your clips are posted automatically.
             </div>
           </div>
           <input

@@ -85,10 +85,8 @@ export default function GenericPage() {
     <div className="max-w-4xl">
       <h1 className="mb-1 text-2xl font-semibold">Generic footage</h1>
       <p className="mb-6 text-sm text-ink-400">
-        Stock clips used by <strong>Full-video → Generic</strong> mode: their visuals replace the
-        original footage while the original audio is kept. Upload here, or drop files straight into{" "}
-        <code>storage/generic</code>. This library is <strong>shared by everyone</strong>, so uploads
-        stay available for all users.
+        Stock clips for <strong>Generic</strong> mode — they replace the visuals while your original
+        audio is kept. This library is shared with everyone.
       </p>
 
       <input
@@ -121,7 +119,7 @@ export default function GenericPage() {
           <div className="mb-3 text-4xl">🎞️</div>
           <p className="font-medium">No generic footage yet</p>
           <p className="mt-1 text-sm text-ink-400">
-            Upload stock clips to use them as B-roll in Full-video mode.
+            Upload stock clips to use as background footage.
           </p>
         </div>
       ) : (
