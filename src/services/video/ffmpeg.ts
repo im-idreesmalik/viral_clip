@@ -311,11 +311,13 @@ export async function renderClip(opts: RenderClipOptions): Promise<void> {
       if (vertical) {
         let filter: string;
         if (generic) {
-          // Normalize each generic clip, concat them into one reel, trim to the
-          // clip length, then feed that into the vertical (blurred-fill) filter.
+          // Normalize each generic clip to the vertical frame, concat them into
+          // one reel, trim to the clip length, then feed into the vertical
+          // (blurred-fill) filter. Generic footage is stored 9:16 already, so
+          // this is a straight fit; any stray non-9:16 file is cover-cropped.
           const norm = generic.map(
             (_, i) =>
-              `[${i + 1}:v]scale=1920:1080:force_original_aspect_ratio=increase,crop=1920:1080,setsar=1,fps=30,format=yuv420p[g${i}]`,
+              `[${i + 1}:v]scale=${VERTICAL_WIDTH}:${VERTICAL_HEIGHT}:force_original_aspect_ratio=increase,crop=${VERTICAL_WIDTH}:${VERTICAL_HEIGHT},setsar=1,fps=30,format=yuv420p[g${i}]`,
           );
           const cat = generic.map((_, i) => `[g${i}]`).join("");
           const reel = `${norm.join(";")};${cat}concat=n=${generic.length}:v=1:a=0[gcat];[gcat]trim=0:${duration.toFixed(3)},setpts=PTS-STARTPTS[gv]`;
@@ -353,6 +355,49 @@ export async function renderClip(opts: RenderClipOptions): Promise<void> {
     // A GPU encoder can fail (GPU busy, driver/codec issue) — fall back to CPU.
     if (preferred !== "libx264") {
       log.warn(`Render failed on "${preferred}"; retrying with libx264 (CPU)`, {
+        message: err instanceof Error ? err.message : String(err),
+      });
+      await runRender("libx264");
+    } else {
+      throw err;
+    }
+  }
+}
+
+/**
+ * Convert any video into a 1080x1920 (9:16) MP4 with the blurred-fill
+ * background. Used to normalize uploaded generic/stock footage so every clip
+ * in the library is vertical before it's ever used. Clips that are already 9:16
+ * simply fill the frame (the blurred background stays hidden behind them).
+ */
+export async function normalizeToVertical(input: string, output: string): Promise<void> {
+  const meta = await probe(input).catch(() => null);
+  const hasAudio = meta?.hasAudio ?? false;
+
+  const runRender = (encoder: string): Promise<void> =>
+    new Promise((resolve, reject) => {
+      const command = ffmpeg(input);
+      let filter = buildVerticalFilter({});
+      const maps = ["-map", "[v]"];
+      if (hasAudio) {
+        filter += `;[0:a]${LOUDNORM}[aout]`;
+        maps.push("-map", "[aout]");
+      }
+      command.complexFilter(filter);
+      command.outputOptions(maps);
+      applyEncoder(command, encoder);
+      command
+        .on("error", (err) => reject(new Error(`Normalize failed (${encoder}): ${err.message}`)))
+        .on("end", () => resolve())
+        .save(output);
+    });
+
+  const preferred = env.ffmpegVideoEncoder || "libx264";
+  try {
+    await runRender(preferred);
+  } catch (err) {
+    if (preferred !== "libx264") {
+      log.warn(`Normalize failed on "${preferred}"; retrying with libx264 (CPU)`, {
         message: err instanceof Error ? err.message : String(err),
       });
       await runRender("libx264");

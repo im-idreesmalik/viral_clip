@@ -5,6 +5,7 @@ import fsp from "node:fs/promises";
 import path from "node:path";
 import { handler, ok, created, requireSession, ApiError } from "@/lib/api";
 import { listGenericFootage, resolveKey, ensureDirFor } from "@/lib/storage";
+import { normalizeToVertical } from "@/services/video/ffmpeg";
 
 // Streaming uploads of (potentially large) generic footage.
 export const runtime = "nodejs";
@@ -44,14 +45,35 @@ export const POST = handler(async (req) => {
     throw new ApiError(400, `Unsupported type .${ext}. Allowed: ${[...ALLOWED_EXT].join(", ")}`);
   }
 
-  // Sanitize to a safe, folder-local filename.
-  const safe =
-    path.basename(file.name).replace(/[^\w.\- ]+/g, "_").trim() || `generic-${file.size}.${ext}`;
+  // Stored file is always a normalized vertical .mp4, so derive a safe base name
+  // and force the .mp4 extension.
+  const base =
+    path
+      .basename(file.name)
+      .replace(/\.[^.]+$/, "")
+      .replace(/[^\w.\- ]+/g, "_")
+      .trim() || `generic-${file.size}`;
+  const safe = `${base}.mp4`;
   const key = `generic/${safe}`;
+  // Temp lands with a non-video extension so it's ignored by the footage lister
+  // while the upload + transcode are in flight.
+  const tmpKey = `generic/.uploading-${base}-${file.size}.part`;
   await ensureDirFor(key);
 
+  const tmpPath = resolveKey(tmpKey);
+  const outPath = resolveKey(key);
+
+  // 1. Stream the raw upload to a temp file.
   const nodeStream = Readable.fromWeb(file.stream() as Parameters<typeof Readable.fromWeb>[0]);
-  await pipeline(nodeStream, createWriteStream(resolveKey(key)));
+  await pipeline(nodeStream, createWriteStream(tmpPath));
+
+  // 2. Transcode to a 1080x1920 (9:16) vertical MP4 so every generic clip is
+  //    vertical before it's ever used. Always clean up the temp file.
+  try {
+    await normalizeToVertical(tmpPath, outPath);
+  } finally {
+    await fsp.rm(tmpPath, { force: true }).catch(() => undefined);
+  }
 
   return created({ name: safe });
 });

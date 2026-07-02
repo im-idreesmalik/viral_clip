@@ -86,7 +86,8 @@ export default function GenericPage() {
       <h1 className="mb-1 text-2xl font-semibold">Generic footage</h1>
       <p className="mb-6 text-sm text-ink-400">
         Stock clips for <strong>Generic</strong> mode — they replace the visuals while your original
-        audio is kept. This library is shared with everyone.
+        audio is kept. Uploads are automatically converted to vertical (9:16). This library is shared
+        with everyone.
       </p>
 
       <input
@@ -99,7 +100,11 @@ export default function GenericPage() {
       />
       <div className="mb-6">
         <button onClick={() => fileRef.current?.click()} disabled={uploading} className="btn-primary">
-          {uploading ? `Uploading… ${progress}%` : "⬆ Upload generic videos"}
+          {uploading
+            ? progress < 100
+              ? `Uploading… ${progress}%`
+              : "Converting to 9:16…"
+            : "⬆ Upload generic videos"}
         </button>
         {uploading && (
           <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-ink-700">
