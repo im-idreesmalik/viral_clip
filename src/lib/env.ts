@@ -95,6 +95,10 @@ export const env = {
   openaiWhisperModel: process.env.OPENAI_WHISPER_MODEL || "whisper-1",
   whisperCli: process.env.WHISPER_CLI || "",
   whisperModel: process.env.WHISPER_MODEL || "",
+  // Language for the local whisper.cpp provider: "auto" detects per-video
+  // (needs a multilingual model, e.g. large-v3-turbo), or an ISO code like
+  // "en" / "ur" / "hi". Ignored by English-only (.en) models.
+  whisperLanguage: process.env.WHISPER_LANGUAGE || "auto",
 
   videoWorkerConcurrency: int(process.env.VIDEO_WORKER_CONCURRENCY, 1),
   publishWorkerConcurrency: int(process.env.PUBLISH_WORKER_CONCURRENCY, 2),

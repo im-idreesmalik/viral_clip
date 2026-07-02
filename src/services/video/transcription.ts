@@ -337,10 +337,18 @@ async function transcribeLocal(videoPath: string): Promise<Transcript> {
 
     const outBase = path.join(tmpRoot, "out");
     // whisper.cpp: -oj writes JSON; --max-len 1 yields token/word-level segments.
+    // -l sets the language ("auto" detects it — needs a multilingual model).
     // Hard timeout so a stuck CLI can't hang the job; killed on overrun.
     await execFileAsync(
       env.whisperCli,
-      ["-m", env.whisperModel, "-f", wavPath, "-oj", "-of", outBase, "--max-len", "1"],
+      [
+        "-m", env.whisperModel,
+        "-f", wavPath,
+        "-l", env.whisperLanguage || "auto",
+        "-oj",
+        "-of", outBase,
+        "--max-len", "1",
+      ],
       { timeout: env.transcribeTimeoutMs, killSignal: "SIGKILL", maxBuffer: 1024 * 1024 * 64 },
     );
 
