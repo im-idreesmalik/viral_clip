@@ -2,7 +2,7 @@ import { Readable } from "node:stream";
 import { createWriteStream } from "node:fs";
 import { pipeline } from "node:stream/promises";
 import path from "node:path";
-import { ClipMode, VideoSource, VideoStatus } from "@prisma/client";
+import { ClipMode, FootageMode, VideoSource, VideoStatus } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { handler, created, requireSession, ApiError } from "@/lib/api";
 import { resolveKey, ensureDirFor } from "@/lib/storage";
@@ -43,6 +43,8 @@ export const POST = handler(async (req) => {
   const clipMode = clipModeRaw === ClipMode.FULL ? ClipMode.FULL : ClipMode.VIRAL;
   // burnCaptions defaults to true unless explicitly "false".
   const burnCaptions = field(form, "burnCaptions") !== "false";
+  const footageMode =
+    field(form, "footageMode") === FootageMode.GENERIC ? FootageMode.GENERIC : FootageMode.ORIGINAL;
 
   const video = await prisma.video.create({
     data: {
@@ -55,6 +57,7 @@ export const POST = handler(async (req) => {
       segmentSeconds: clampInt(intField(form, "segmentSeconds", 45), 15, 60),
       targetClipCount: clampInt(intField(form, "targetClipCount", 8), 1, 30),
       burnCaptions,
+      footageMode,
     },
   });
 

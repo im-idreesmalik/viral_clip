@@ -48,7 +48,11 @@ export const config = {
   matcher: [
     /*
      * Match everything except Next.js internals and static assets.
+     *
+     * File-upload routes are excluded so their (large) multipart bodies aren't
+     * capped by the middleware body-size limit — they enforce auth themselves
+     * via requireSession().
      */
-    "/((?!_next/static|_next/image|favicon.ico).*)",
+    "/((?!_next/static|_next/image|favicon.ico|api/videos/upload|api/generic).*)",
   ],
 };

@@ -95,7 +95,7 @@ export default function PublishingPage() {
                   <div className="flex items-center gap-2">
                     <span className="text-sm">{meta?.icon}</span>
                     <span className="truncate text-sm font-medium">
-                      {p.clip?.title ?? p.caption ?? "Clip"}
+                      {p.clip?.composedTitle ?? p.clip?.title ?? p.caption ?? "Clip"}
                     </span>
                     {p.autoScheduled && (
                       <span className="badge bg-ink-800 text-ink-100/50">auto</span>

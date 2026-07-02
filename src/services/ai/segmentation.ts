@@ -54,7 +54,7 @@ export function segmentVideo(opts: SegmentOptions): DetectedClip[] {
  * Title a sequential part. When a transcript is available we use a short snippet
  * of what's said in that window as the clip's descriptive title (the "your
  * title" part of the published caption); otherwise we fall back to "Part N".
- * The "Part N" prefix itself is added at publish time by composeCaption.
+ * The "Part N" prefix itself is added at publish time by composeTitle.
  */
 function partTitle(
   order: number,

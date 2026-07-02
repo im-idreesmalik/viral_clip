@@ -4,7 +4,7 @@ import { ClipStatus, Platform, PublicationStatus } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { handler, parseBody, created, requireSession, ApiError } from "@/lib/api";
 import { enqueuePublish } from "@/lib/queue";
-import { composeCaption } from "@/lib/caption";
+import { composeDescription } from "@/lib/caption";
 import { getProvider } from "@/services/social";
 
 type Ctx = { params: Promise<{ id: string }> };
@@ -57,13 +57,9 @@ export const POST = handler(async (req, ctx: Ctx) => {
     const batchId = crypto.randomUUID();
     for (let i = 0; i < video.clips.length; i++) {
       const clip = video.clips[i];
-      const caption = composeCaption({
-        videoTitle: video.title,
-        hashtags: video.hashtags,
-        clipMode: video.clipMode,
-        order: clip.order,
-        clipTitle: clip.title,
-      });
+      // The post TITLE (video title + Part N) is composed in the publisher; here
+      // we store the DESCRIPTION (clip text + hashtags) as the caption.
+      const caption = composeDescription({ clipTitle: clip.title, hashtags: video.hashtags });
       const first = i === 0;
       const pub = await prisma.publication.create({
         data: {

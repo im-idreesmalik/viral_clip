@@ -1,29 +1,27 @@
 /**
- * Compose a clip's published caption from its parts:
- *   {video title} — Part {n} — {your title}
+ * A published clip has two parts:
+ *   - TITLE:       the video title, plus "— Part N" for sequential (FULL) clips.
+ *   - DESCRIPTION: the clip's own text ("what you write") plus hashtags.
  *
- *   {hashtags}
- *
- * The part number is only added for FULL-video (sequential) clips. Any leading
- * "Part N —" already present in the clip title is stripped so it isn't doubled.
+ * Platforms with separate fields (YouTube) use both; single-caption platforms
+ * (TikTok/Instagram/Facebook) combine them.
  */
 import type { ClipMode } from "@prisma/client";
 
-export function composeCaption(opts: {
+export function composeTitle(opts: {
   videoTitle: string;
-  hashtags?: string | null;
   clipMode: ClipMode | "VIRAL" | "FULL";
   order?: number | null;
-  clipTitle: string;
 }): string {
-  const yourTitle =
+  const title = opts.videoTitle.trim();
+  if (opts.clipMode === "FULL" && opts.order != null) return `${title} | Part ${opts.order}`;
+  return title;
+}
+
+export function composeDescription(opts: { clipTitle: string; hashtags?: string | null }): string {
+  // Strip any leading "Part N —" the clip title may still carry (older clips).
+  const text =
     opts.clipTitle.replace(/^\s*part\s+\d+\s*[—–-]?\s*/i, "").trim() || opts.clipTitle.trim();
-
-  const segments: string[] = [opts.videoTitle.trim()];
-  if (opts.clipMode === "FULL" && opts.order != null) segments.push(`Part ${opts.order}`);
-  if (yourTitle) segments.push(yourTitle);
-
-  const title = segments.filter(Boolean).join(" — ");
   const tags = (opts.hashtags ?? "").trim();
-  return tags ? `${title}\n\n${tags}` : title;
+  return tags ? `${text}\n\n${tags}` : text;
 }

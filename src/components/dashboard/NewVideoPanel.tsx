@@ -14,6 +14,7 @@ export function NewVideoPanel({ onCreated }: { onCreated: () => void }) {
   const [segmentSeconds, setSegmentSeconds] = useState(45);
   const [targetClipCount, setTargetClipCount] = useState(8);
   const [burnCaptions, setBurnCaptions] = useState(true);
+  const [footageMode, setFootageMode] = useState<"ORIGINAL" | "GENERIC">("ORIGINAL");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [progress, setProgress] = useState(0);
@@ -35,6 +36,7 @@ export function NewVideoPanel({ onCreated }: { onCreated: () => void }) {
             segmentSeconds,
             targetClipCount,
             burnCaptions,
+            footageMode,
           }),
         });
         setUrl("");
@@ -63,6 +65,7 @@ export function NewVideoPanel({ onCreated }: { onCreated: () => void }) {
       form.append("segmentSeconds", String(segmentSeconds));
       form.append("targetClipCount", String(targetClipCount));
       form.append("burnCaptions", String(burnCaptions));
+      form.append("footageMode", footageMode);
 
       const xhr = new XMLHttpRequest();
       xhr.open("POST", "/api/videos/upload");
@@ -131,7 +134,10 @@ export function NewVideoPanel({ onCreated }: { onCreated: () => void }) {
         <div className="grid grid-cols-2 gap-2">
           <ModeCard
             active={clipMode === "VIRAL"}
-            onClick={() => setClipMode("VIRAL")}
+            onClick={() => {
+              setClipMode("VIRAL");
+              setFootageMode("ORIGINAL");
+            }}
             title="Viral-only"
             desc="AI extracts the highest-confidence viral moments."
           />
@@ -199,6 +205,31 @@ export function NewVideoPanel({ onCreated }: { onCreated: () => void }) {
         />
         Generate &amp; burn in captions (subtitles)
       </label>
+
+      {clipMode === "FULL" && (
+        <div className="mt-4">
+          <label className="label">Footage</label>
+          <div className="grid grid-cols-2 gap-2">
+            <ModeCard
+              active={footageMode === "ORIGINAL"}
+              onClick={() => setFootageMode("ORIGINAL")}
+              title="Original"
+              desc="Use the source video's own footage."
+            />
+            <ModeCard
+              active={footageMode === "GENERIC"}
+              onClick={() => setFootageMode("GENERIC")}
+              title="Generic (stock)"
+              desc="Random clips as visuals; keep the original audio."
+            />
+          </div>
+          {footageMode === "GENERIC" && (
+            <p className="mt-1 text-xs text-ink-400">
+              Add stock videos in the <strong>Generic</strong> tab first.
+            </p>
+          )}
+        </div>
+      )}
 
       {error && <p className="mt-4 rounded-lg bg-red-950/50 px-3 py-2 text-sm text-red-300">{error}</p>}
 

@@ -16,7 +16,7 @@ export function PublishDialog({
 }) {
   const [accounts, setAccounts] = useState<SocialAccountDTO[]>([]);
   const [accountId, setAccountId] = useState<string>("");
-  const [caption, setCaption] = useState(clip.composedCaption || clip.title);
+  const [caption, setCaption] = useState(clip.composedDescription || clip.title);
   const [schedule, setSchedule] = useState(false);
   const [publishAt, setPublishAt] = useState("");
   const [busy, setBusy] = useState(false);
@@ -96,7 +96,16 @@ export function PublishDialog({
             </div>
 
             <div>
-              <label className="label">Caption</label>
+              <label className="label">Title</label>
+              <p className="truncate rounded-lg border border-ink-700 bg-ink-950/60 px-3 py-2 text-sm text-ink-200">
+                {clip.composedTitle}
+              </p>
+              <p className="mt-1 text-xs text-ink-400">
+                Auto from the video title + part number — edit the video title to change it.
+              </p>
+            </div>
+            <div>
+              <label className="label">Description</label>
               <textarea
                 className="input min-h-20 resize-y"
                 value={caption}

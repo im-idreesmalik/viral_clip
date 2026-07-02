@@ -7,7 +7,7 @@
  */
 import type { Video, Clip, ClipMode, SocialAccount, Publication, AutoPublishConfig } from "@prisma/client";
 import { publicUrl } from "./storage";
-import { composeCaption } from "./caption";
+import { composeTitle, composeDescription } from "./caption";
 
 export function serializeVideo(v: Video & { clips?: Clip[] }) {
   return {
@@ -21,6 +21,7 @@ export function serializeVideo(v: Video & { clips?: Clip[] }) {
     segmentSeconds: v.segmentSeconds,
     targetClipCount: v.targetClipCount,
     burnCaptions: v.burnCaptions,
+    footageMode: v.footageMode,
     durationSec: v.durationSec,
     width: v.width,
     height: v.height,
@@ -47,14 +48,11 @@ export function serializeClip(
   const publishedPlatforms = Array.from(
     new Set((c.publications ?? []).filter((p) => p.status === "PUBLISHED").map((p) => p.platform)),
   );
-  const composedCaption = ctx
-    ? composeCaption({
-        videoTitle: ctx.videoTitle,
-        hashtags: ctx.hashtags,
-        clipMode: ctx.clipMode,
-        order: c.order,
-        clipTitle: c.title,
-      })
+  const composedTitle = ctx
+    ? composeTitle({ videoTitle: ctx.videoTitle, clipMode: ctx.clipMode, order: c.order })
+    : c.title;
+  const composedDescription = ctx
+    ? composeDescription({ clipTitle: c.title, hashtags: ctx.hashtags })
     : c.title;
   return {
     id: c.id,
@@ -73,7 +71,8 @@ export function serializeClip(
     captionsUrl: publicUrl(c.captionsKey),
     errorMessage: c.errorMessage,
     publishedPlatforms,
-    composedCaption,
+    composedTitle,
+    composedDescription,
     createdAt: c.createdAt.toISOString(),
     updatedAt: c.updatedAt.toISOString(),
   };
@@ -95,7 +94,7 @@ export function serializeSocialAccount(a: SocialAccount) {
 }
 
 export function serializePublication(
-  p: Publication & { clip?: Clip; socialAccount?: SocialAccount },
+  p: Publication & { clip?: (Clip & { video?: Video }) | null; socialAccount?: SocialAccount | null },
 ) {
   return {
     id: p.id,
@@ -111,7 +110,18 @@ export function serializePublication(
     lastError: p.lastError,
     autoScheduled: p.autoScheduled,
     createdAt: p.createdAt.toISOString(),
-    clip: p.clip ? serializeClip(p.clip) : undefined,
+    clip: p.clip
+      ? serializeClip(
+          p.clip,
+          p.clip.video
+            ? {
+                videoTitle: p.clip.video.title,
+                hashtags: p.clip.video.hashtags,
+                clipMode: p.clip.video.clipMode,
+              }
+            : undefined,
+        )
+      : undefined,
     account: p.socialAccount ? serializeSocialAccount(p.socialAccount) : undefined,
   };
 }

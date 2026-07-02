@@ -60,6 +60,11 @@ enum PublicationStatus {
   CANCELLED
 }
 
+enum FootageMode {
+  ORIGINAL // use the source video's own footage
+  GENERIC // replace visuals with random generic/stock footage, keep original audio
+}
+
 // ---------------------------------------------------------------------------
 // Models
 // ---------------------------------------------------------------------------
@@ -69,6 +74,7 @@ model User {
   email        String   @unique
   passwordHash String
   name         String?
+  handle       String? // @username watermarked onto rendered clips
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
@@ -97,6 +103,9 @@ model Video {
   segmentSeconds  Int      @default(45) // target clip length for FULL mode
   targetClipCount Int      @default(8) // soft cap on clips (VIRAL mode only)
   burnCaptions    Boolean  @default(true) // generate + burn in subtitles
+  // ORIGINAL = use the source footage; GENERIC = replace visuals with random
+  // stock clips from storage/generic while keeping the original audio.
+  footageMode     FootageMode @default(ORIGINAL)
 
   // Source media metadata.
   storageKey   String? // path within STORAGE_DIR to the downloaded/uploaded source

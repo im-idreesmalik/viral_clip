@@ -39,7 +39,8 @@ export interface ClipDTO {
   captionsUrl: string | null;
   errorMessage: string | null;
   publishedPlatforms: PlatformName[];
-  composedCaption: string;
+  composedTitle: string;
+  composedDescription: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -55,6 +56,7 @@ export interface VideoDTO {
   segmentSeconds: number;
   targetClipCount: number;
   burnCaptions: boolean;
+  footageMode: "ORIGINAL" | "GENERIC";
   durationSec: number | null;
   width: number | null;
   height: number | null;

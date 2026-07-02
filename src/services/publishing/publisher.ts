@@ -13,6 +13,7 @@ import { createLogger } from "@/lib/logger";
 import { decrypt, decryptMaybe, encrypt, encryptMaybe } from "@/lib/crypto";
 import { resolveKey } from "@/lib/storage";
 import { enqueuePublish } from "@/lib/queue";
+import { composeTitle, composeDescription } from "@/lib/caption";
 import { getProvider, PublishError } from "@/services/social";
 import type { AccountContext } from "@/services/social/types";
 
@@ -39,7 +40,7 @@ async function recordLog(
 export async function executePublication(publicationId: string): Promise<void> {
   const publication = await prisma.publication.findUnique({
     where: { id: publicationId },
-    include: { clip: true, socialAccount: true },
+    include: { clip: { include: { video: true } }, socialAccount: true },
   });
   if (!publication) throw new Error(`Publication ${publicationId} not found`);
 
@@ -72,11 +73,22 @@ export async function executePublication(publicationId: string): Promise<void> {
   try {
     const account = await buildAccountContext(socialAccount.id);
 
+    // TITLE = video title + Part N; DESCRIPTION = clip text + hashtags (or the
+    // user-edited caption stored on the publication).
+    const title = composeTitle({
+      videoTitle: clip.video.title,
+      clipMode: clip.video.clipMode,
+      order: clip.order,
+    });
+    const description =
+      publication.caption ??
+      composeDescription({ clipTitle: clip.title, hashtags: clip.video.hashtags });
+
     const result = await provider.publish({
       filePath: resolveKey(clip.storageKey),
       publicUrl: absoluteMediaUrl(clip.storageKey),
-      caption: publication.caption ?? clip.title,
-      title: clip.title,
+      caption: description,
+      title,
       account,
     });
 

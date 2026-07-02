@@ -9,7 +9,7 @@ export const GET = handler(async () => {
     where: { userId: session.sub },
     orderBy: { createdAt: "desc" },
     take: 100,
-    include: { clip: true, socialAccount: true },
+    include: { clip: { include: { video: true } }, socialAccount: true },
   });
   return ok(publications.map(serializePublication));
 });

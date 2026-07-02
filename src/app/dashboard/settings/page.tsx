@@ -12,12 +12,15 @@ const INTERVAL_PRESETS = [
   { label: "Daily", value: 1440 },
 ];
 
-export default function AutomationPage() {
+export default function SettingsPage() {
   const [config, setConfig] = useState<AutoConfigDTO | null>(null);
   const [accounts, setAccounts] = useState<SocialAccountDTO[]>([]);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [handle, setHandle] = useState("");
+  const [savingHandle, setSavingHandle] = useState(false);
+  const [handleSaved, setHandleSaved] = useState(false);
   const toast = useToast();
 
   useEffect(() => {
@@ -28,7 +31,29 @@ export default function AutomationPage() {
       setConfig(cfg);
       setAccounts(acc.accounts.filter((a) => a.isActive));
     });
+    api<{ user: { handle: string | null } }>("/api/auth/me")
+      .then((res) => setHandle(res.user.handle ?? ""))
+      .catch(() => undefined);
   }, []);
+
+  async function saveHandle() {
+    setSavingHandle(true);
+    setHandleSaved(false);
+    try {
+      const res = await api<{ user: { handle: string | null } }>("/api/auth/me", {
+        method: "PATCH",
+        body: JSON.stringify({ handle: handle.replace(/^@+/, "").trim() }),
+      });
+      setHandle(res.user.handle ?? "");
+      setHandleSaved(true);
+      toast.success("Username saved");
+      setTimeout(() => setHandleSaved(false), 2000);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to save username");
+    } finally {
+      setSavingHandle(false);
+    }
+  }
 
   if (!config)
     return (
@@ -76,14 +101,51 @@ export default function AutomationPage() {
   }
 
   return (
-    <div className="max-w-2xl">
-      <h1 className="mb-1 text-2xl font-semibold">Automation</h1>
-      <p className="mb-6 text-sm text-ink-100/60">
-        Auto-publish approved clips on a schedule. The scheduler posts the next approved clip to each
-        selected platform at the chosen interval.
-      </p>
+    <div className="max-w-2xl space-y-8">
+      <div>
+        <h1 className="mb-1 text-2xl font-semibold">Settings</h1>
+        <p className="text-sm text-ink-100/60">Your creator profile and auto-publishing preferences.</p>
+      </div>
 
-      <div className="card space-y-6 p-6">
+      {/* Username / watermark */}
+      <div className="card space-y-4 p-6">
+        <div>
+          <label className="label" htmlFor="handle">
+            Username
+          </label>
+          <p className="mb-3 text-xs text-ink-100/55">
+            Burned small onto the bottom-center of every rendered clip, with an <strong>@</strong>{" "}
+            prefix (smaller than the Part number). Leave blank for no watermark.
+          </p>
+          <div className="flex items-center gap-2">
+            <div className="flex flex-1 items-center rounded-lg border border-ink-700 bg-ink-900 focus-within:border-brand-500">
+              <span className="pl-3 text-ink-100/50">@</span>
+              <input
+                id="handle"
+                type="text"
+                maxLength={64}
+                placeholder="yourname"
+                className="w-full bg-transparent px-2 py-2 text-sm outline-none"
+                value={handle.replace(/^@+/, "")}
+                onChange={(e) => setHandle(e.target.value)}
+              />
+            </div>
+            <button className="btn-primary" onClick={saveHandle} disabled={savingHandle}>
+              {savingHandle ? "Saving…" : "Save"}
+            </button>
+            {handleSaved && <span className="text-sm text-emerald-300">✓</span>}
+          </div>
+        </div>
+      </div>
+
+      <div>
+        <h2 className="mb-1 text-lg font-semibold">Auto-publishing</h2>
+        <p className="mb-4 text-sm text-ink-100/60">
+          Auto-publish approved clips on a schedule. The scheduler posts the next approved clip to
+          each selected platform at the chosen interval.
+        </p>
+
+        <div className="card space-y-6 p-6">
         <label className="flex items-center justify-between">
           <div>
             <div className="font-medium">Enable auto-publishing</div>
@@ -208,6 +270,7 @@ export default function AutomationPage() {
               Next run: {new Date(config.nextRunAt).toLocaleString()}
             </span>
           )}
+          </div>
         </div>
       </div>
     </div>

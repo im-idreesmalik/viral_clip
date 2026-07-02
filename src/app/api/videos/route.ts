@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { ClipMode, VideoSource, VideoStatus } from "@prisma/client";
+import { ClipMode, FootageMode, VideoSource, VideoStatus } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { handler, parseBody, ok, created, requireSession, ApiError } from "@/lib/api";
 import { isYouTubeUrl } from "@/services/video/download";
@@ -26,6 +26,7 @@ const createSchema = z.object({
   segmentSeconds: z.number().int().min(15).max(60).default(45),
   targetClipCount: z.number().int().min(1).max(30).default(8),
   burnCaptions: z.boolean().default(true),
+  footageMode: z.nativeEnum(FootageMode).default(FootageMode.ORIGINAL),
   title: z.string().max(200).optional(),
 });
 
@@ -50,6 +51,7 @@ export const POST = handler(async (req) => {
       segmentSeconds: body.segmentSeconds,
       targetClipCount: body.targetClipCount,
       burnCaptions: body.burnCaptions,
+      footageMode: body.footageMode,
     },
   });
 

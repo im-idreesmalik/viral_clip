@@ -13,6 +13,7 @@ import ffmpegStatic from "ffmpeg-static";
 import ffprobeStatic from "ffprobe-static";
 import { env } from "@/lib/env";
 import { createLogger } from "@/lib/logger";
+import { listGenericFootage } from "@/lib/storage";
 
 const log = createLogger("ffmpeg");
 
@@ -141,6 +142,11 @@ export interface RenderClipOptions {
   subtitlePath?: string;
   /** Text burned into the top band of the vertical frame (e.g. "Part 3"). */
   partLabel?: string;
+  /** GENERIC footage mode: stock video paths whose visuals replace the
+   *  original's (muted). The original audio (from `input`) is kept. */
+  genericInputs?: string[];
+  /** Small "@handle" burned bottom-center (smaller than the part label). */
+  watermark?: string;
   /** Convert to vertical 9:16 with a blurred background fill. Default true. */
   vertical?: boolean;
   onProgress?: (percent: number) => void;
@@ -152,12 +158,18 @@ export interface RenderClipOptions {
  * fit) composited on top — the standard "Reels" look that never letterboxes
  * awkwardly. Subtitles, if provided, are burned on last.
  */
-function buildVerticalFilter(opts: { subtitlePath?: string; partLabel?: string }): string {
+function buildVerticalFilter(opts: {
+  subtitlePath?: string;
+  partLabel?: string;
+  watermark?: string;
+  inputLabel?: string;
+}): string {
   const W = VERTICAL_WIDTH;
   const H = VERTICAL_HEIGHT;
+  const src = opts.inputLabel ?? "0:v";
   // [bg]: cover-scale + crop + blur. [fg]: contain-scale. overlay centered.
   const chain = [
-    `[0:v]split=2[bg][fg]`,
+    `[${src}]split=2[bg][fg]`,
     // Blur cheaply: cover-scale to a SMALL frame, blur that, then upscale to
     // full size (the upscale smooths it further). Far faster than boxblur at
     // 1080x1920 — blurring the small frame is ~9x less work per frame.
@@ -174,6 +186,12 @@ function buildVerticalFilter(opts: { subtitlePath?: string; partLabel?: string }
     chain.push(`[${lastLabel}]${drawTextArg(opts.partLabel)}[titled]`);
     lastLabel = "titled";
   }
+  if (opts.watermark) {
+    chain.push(
+      `[${lastLabel}]${drawTextArg(opts.watermark, { fontsize: 52, y: "h*0.90", borderw: 4 })}[wm]`,
+    );
+    lastLabel = "wm";
+  }
   return chain.join(";") + `;[${lastLabel}]null[v]`;
 }
 
@@ -182,15 +200,21 @@ function buildVerticalFilter(opts: { subtitlePath?: string; partLabel?: string }
  * band of the vertical frame. The font path's drive colon is escaped for the
  * filtergraph (same Windows pitfall as subtitles).
  */
-function drawTextArg(label: string): string {
+function drawTextArg(
+  label: string,
+  opts?: { fontsize?: number; y?: string; borderw?: number },
+): string {
   const fontPath = (env.fontFile || "C:/Windows/Fonts/arialbd.ttf")
     .replace(/\\/g, "/")
     .replace(":", "\\:");
   const text = label.replace(/\\/g, "\\\\").replace(/:/g, "\\:").replace(/'/g, "’");
+  const fontsize = opts?.fontsize ?? 100;
+  const y = opts?.y ?? "h*0.10";
+  const borderw = opts?.borderw ?? 6;
   return (
     `drawtext=fontfile='${fontPath}':text='${text}':` +
-    `fontsize=100:fontcolor=white:borderw=6:bordercolor=black@0.85:` +
-    `x=(w-text_w)/2:y=h*0.10`
+    `fontsize=${fontsize}:fontcolor=white:borderw=${borderw}:bordercolor=black@0.85:` +
+    `x=(w-text_w)/2:y=${y}`
   );
 }
 
@@ -256,7 +280,7 @@ function applyEncoder(command: ReturnType<typeof ffmpeg>, encoder: string) {
 }
 
 export async function renderClip(opts: RenderClipOptions): Promise<void> {
-  const { input, output, startSec, endSec, subtitlePath, partLabel, vertical = true, onProgress } = opts;
+  const { input, output, startSec, endSec, subtitlePath, partLabel, genericInputs, watermark, vertical = true, onProgress } = opts;
   const duration = Math.max(0.1, endSec - startSec);
 
   // Detect audio up front so we only build the audio chain when there's a
@@ -266,10 +290,11 @@ export async function renderClip(opts: RenderClipOptions): Promise<void> {
 
   // Only burn the "Part N" title if the font is available — otherwise skip it
   // rather than fail the whole render.
-  const titleLabel =
-    partLabel && fs.existsSync(env.fontFile || "C:/Windows/Fonts/arialbd.ttf") ? partLabel : undefined;
-  if (partLabel && !titleLabel) {
-    log.warn("Title font not found; skipping burned-in part label", { font: env.fontFile });
+  const fontOk = fs.existsSync(env.fontFile || "C:/Windows/Fonts/arialbd.ttf");
+  const titleLabel = partLabel && fontOk ? partLabel : undefined;
+  const wmLabel = watermark && fontOk ? watermark : undefined;
+  if ((partLabel || watermark) && !fontOk) {
+    log.warn("Title font not found; skipping burned-in text", { font: env.fontFile });
   }
 
   const runRender = (encoder: string): Promise<void> =>
@@ -279,10 +304,26 @@ export async function renderClip(opts: RenderClipOptions): Promise<void> {
         .seekInput(startSec)
         .duration(duration);
 
+      // GENERIC footage: extra inputs whose visuals replace the original's.
+      const generic = genericInputs && genericInputs.length > 0 ? genericInputs : null;
+      if (generic) for (const g of generic) command.input(g);
+
       if (vertical) {
-        let filter = buildVerticalFilter({ subtitlePath, partLabel: titleLabel });
-        // Pass the filtergraph only (no auto-map) and map the outputs ourselves —
-        // letting complexFilter also add `-map [v]` would map the label twice.
+        let filter: string;
+        if (generic) {
+          // Normalize each generic clip, concat them into one reel, trim to the
+          // clip length, then feed that into the vertical (blurred-fill) filter.
+          const norm = generic.map(
+            (_, i) =>
+              `[${i + 1}:v]scale=1920:1080:force_original_aspect_ratio=increase,crop=1920:1080,setsar=1,fps=30,format=yuv420p[g${i}]`,
+          );
+          const cat = generic.map((_, i) => `[g${i}]`).join("");
+          const reel = `${norm.join(";")};${cat}concat=n=${generic.length}:v=1:a=0[gcat];[gcat]trim=0:${duration.toFixed(3)},setpts=PTS-STARTPTS[gv]`;
+          filter = `${reel};${buildVerticalFilter({ subtitlePath, partLabel: titleLabel, watermark: wmLabel, inputLabel: "gv" })}`;
+        } else {
+          filter = buildVerticalFilter({ subtitlePath, partLabel: titleLabel, watermark: wmLabel });
+        }
+        // Audio always comes from the original (input 0), even in GENERIC mode.
         const maps = ["-map", "[v]"];
         if (hasAudio) {
           filter += `;[0:a]${LOUDNORM}[aout]`;
@@ -319,6 +360,33 @@ export async function renderClip(opts: RenderClipOptions): Promise<void> {
       throw err;
     }
   }
+}
+
+/**
+ * Pick random generic clips (with repetition) whose total duration covers
+ * `durationSec`, for GENERIC footage mode. Returns [] if none are available.
+ */
+export async function selectGenericFootage(durationSec: number): Promise<string[]> {
+  const files = listGenericFootage();
+  if (files.length === 0) return [];
+  const withDur: { path: string; dur: number }[] = [];
+  for (const f of files) {
+    const m = await probe(f).catch(() => null);
+    if (m && m.durationSec > 0.2) withDur.push({ path: f, dur: m.durationSec });
+  }
+  if (withDur.length === 0) return [];
+
+  const picks: string[] = [];
+  let total = 0;
+  let guard = 0;
+  // Cap the count so the filtergraph stays reasonable even with very short clips.
+  while (total < durationSec + 0.3 && guard < 60) {
+    const pick = withDur[Math.floor(Math.random() * withDur.length)];
+    picks.push(pick.path);
+    total += pick.dur;
+    guard++;
+  }
+  return picks;
 }
 
 /** Capture a single-frame JPEG thumbnail at the given timestamp. */

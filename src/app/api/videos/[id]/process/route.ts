@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { ClipMode, VideoStatus } from "@prisma/client";
+import { ClipMode, FootageMode, VideoStatus } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { handler, ok, requireSession, ApiError } from "@/lib/api";
 import { enqueueProcessVideo } from "@/lib/queue";
@@ -15,6 +15,7 @@ const schema = z
     segmentSeconds: z.number().int().min(15).max(60).optional(),
     targetClipCount: z.number().int().min(1).max(30).optional(),
     burnCaptions: z.boolean().optional(),
+    footageMode: z.nativeEnum(FootageMode).optional(),
   })
   .optional();
 
@@ -48,6 +49,7 @@ export const POST = handler(async (req, ctx: Ctx) => {
       segmentSeconds: overrides?.segmentSeconds ?? video.segmentSeconds,
       targetClipCount: overrides?.targetClipCount ?? video.targetClipCount,
       burnCaptions: overrides?.burnCaptions ?? video.burnCaptions,
+      footageMode: overrides?.footageMode ?? video.footageMode,
     },
   });
 

@@ -12,9 +12,28 @@ import path from "node:path";
 import { env } from "./env";
 
 const ROOT = env.storageDir;
+const GENERIC_DIR = path.join(ROOT, "generic");
+const GENERIC_VIDEO_EXTS = new Set([".mp4", ".mov", ".mkv", ".webm", ".m4v", ".avi"]);
 
 export function ensureStorageRoot(): void {
   fs.mkdirSync(ROOT, { recursive: true });
+}
+
+/**
+ * Absolute paths of all generic/stock videos the user dropped in
+ * storage/generic. Used by GENERIC footage mode to build B-roll reels. Creates
+ * the folder on first call so it's ready for the user to paste files into.
+ */
+export function listGenericFootage(): string[] {
+  try {
+    fs.mkdirSync(GENERIC_DIR, { recursive: true });
+    return fs
+      .readdirSync(GENERIC_DIR)
+      .filter((f) => GENERIC_VIDEO_EXTS.has(path.extname(f).toLowerCase()))
+      .map((f) => path.join(GENERIC_DIR, f));
+  } catch {
+    return [];
+  }
 }
 
 /** Resolve a storage key to an absolute path, rejecting traversal. */

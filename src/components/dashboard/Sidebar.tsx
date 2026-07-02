@@ -9,6 +9,8 @@ const NAV = [
   { href: "/dashboard", label: "Videos", icon: "🎬", exact: true },
   { href: "/dashboard/connections", label: "Connections", icon: "🔗" },
   { href: "/dashboard/publishing", label: "Publishing", icon: "📡" },
+  { href: "/dashboard/generic", label: "Generic", icon: "🎞️" },
+  { href: "/dashboard/settings", label: "Settings", icon: "⚙️" },
 ];
 
 export function Sidebar({ user }: { user: { name: string | null; email: string } }) {

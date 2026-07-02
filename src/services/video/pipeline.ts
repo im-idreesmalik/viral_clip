@@ -14,7 +14,7 @@ import { prisma } from "@/lib/db";
 import { createLogger } from "@/lib/logger";
 import { env } from "@/lib/env";
 import { resolveKey, ensureDirFor, writeFile, deleteKey } from "@/lib/storage";
-import { probe, renderClip, captureThumbnail } from "./ffmpeg";
+import { probe, renderClip, captureThumbnail, selectGenericFootage } from "./ffmpeg";
 import { downloadVideo } from "./download";
 import { transcribe, type Transcript } from "./transcription";
 import { buildCaptions } from "@/services/captions/subtitles";
@@ -193,7 +193,10 @@ async function selectClips(mode: ClipMode, args: SelectArgs): Promise<DetectedCl
  * the SRT sidecar. Reused by the regenerate worker.
  */
 export async function renderClipRecord(clipId: string): Promise<void> {
-  const clip = await prisma.clip.findUnique({ where: { id: clipId }, include: { video: true } });
+  const clip = await prisma.clip.findUnique({
+    where: { id: clipId },
+    include: { video: { include: { user: true } } },
+  });
   if (!clip || !clip.video.storageKey) throw new Error(`Clip ${clipId} has no source`);
 
   await prisma.clip.update({ where: { id: clipId }, data: { status: ClipStatus.RENDERING } });
@@ -224,6 +227,22 @@ export async function renderClipRecord(clipId: string): Promise<void> {
   }
 
   try {
+    // GENERIC footage mode: replace the visuals with random stock clips.
+    let genericInputs: string[] | undefined;
+    // Generic (B-roll) footage only applies to Full-video mode.
+    if (clip.video.footageMode === "GENERIC" && clip.video.clipMode === "FULL") {
+      genericInputs = await selectGenericFootage(clip.endSec - clip.startSec);
+      if (genericInputs.length === 0) {
+        log.warn("GENERIC footage mode but no files in storage/generic; using original footage.", {
+          clipId,
+        });
+        genericInputs = undefined;
+      }
+    }
+
+    // Per-user @handle watermark, burned small at the bottom-center.
+    const watermark = clip.video.user.handle ? `@${clip.video.user.handle}` : undefined;
+
     await renderClip({
       input: sourcePath,
       output: resolveKey(clipKey),
@@ -232,6 +251,8 @@ export async function renderClipRecord(clipId: string): Promise<void> {
       subtitlePath,
       partLabel:
         clip.video.clipMode === "FULL" && clip.order != null ? `Part ${clip.order}` : undefined,
+      genericInputs,
+      watermark,
       vertical: true,
     });
 
@@ -279,7 +300,10 @@ async function setStatus(videoId: string, status: VideoStatus) {
  *     shifted window (a fresh "take" the user can compare against the original).
  */
 export async function regenerateClip(clipId: string, variation = false): Promise<string> {
-  const clip = await prisma.clip.findUnique({ where: { id: clipId }, include: { video: true } });
+  const clip = await prisma.clip.findUnique({
+    where: { id: clipId },
+    include: { video: { include: { user: true } } },
+  });
   if (!clip) throw new Error(`Clip ${clipId} not found`);
 
   if (!variation) {
