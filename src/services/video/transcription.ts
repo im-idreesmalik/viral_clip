@@ -337,13 +337,12 @@ async function transcribeLocal(videoPath: string): Promise<Transcript> {
 
     const outBase = path.join(tmpRoot, "out");
     // whisper.cpp: -oj writes JSON; --max-len 1 yields token/word-level segments.
-    await execFileAsync(env.whisperCli, [
-      "-m", env.whisperModel,
-      "-f", wavPath,
-      "-oj",
-      "-of", outBase,
-      "--max-len", "1",
-    ]);
+    // Hard timeout so a stuck CLI can't hang the job; killed on overrun.
+    await execFileAsync(
+      env.whisperCli,
+      ["-m", env.whisperModel, "-f", wavPath, "-oj", "-of", outBase, "--max-len", "1"],
+      { timeout: env.transcribeTimeoutMs, killSignal: "SIGKILL", maxBuffer: 1024 * 1024 * 64 },
+    );
 
     const raw = await fsp.readFile(`${outBase}.json`, "utf8");
     let json: WhisperCppJson;
