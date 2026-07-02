@@ -113,20 +113,45 @@ export async function extractPcmF32(input: string): Promise<Float32Array> {
   const tmp = pathMod.join(os.tmpdir(), `vc-pcm-${Date.now()}-${Math.round(performance.now())}.raw`);
 
   await new Promise<void>((resolve, reject) => {
-    ffmpeg(input)
+    const command = ffmpeg(input)
       .noVideo()
       .audioChannels(1)
       .audioFrequency(16000)
-      .outputOptions(["-f", "f32le", "-acodec", "pcm_f32le"])
-      .on("error", (err) => reject(new Error(`PCM extract failed: ${err.message}`)))
-      .on("end", () => resolve())
+      .outputOptions(["-f", "f32le", "-acodec", "pcm_f32le"]);
+    // Timeout + kill so a stuck decode can't hang (and, since this runs in the
+    // transcription subprocess, can't orphan an ffmpeg when the parent kills us).
+    let timedOut = false;
+    const timer = setTimeout(() => {
+      timedOut = true;
+      try {
+        command.kill("SIGKILL");
+      } catch {
+        /* already gone */
+      }
+      reject(new Error(`PCM extract timed out after ${env.renderTimeoutMs}ms`));
+    }, env.renderTimeoutMs);
+    command
+      .on("error", (err) => {
+        clearTimeout(timer);
+        if (timedOut) return;
+        reject(new Error(`PCM extract failed: ${err.message}`));
+      })
+      .on("end", () => {
+        clearTimeout(timer);
+        resolve();
+      })
       .save(tmp);
   });
 
   try {
     const buf = await fsp.readFile(tmp);
-    // Copy into a fresh, 4-byte-aligned ArrayBuffer before viewing as Float32.
-    const aligned = buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength);
+    const usableLen = buf.byteLength - (buf.byteLength % 4);
+    // Avoid a second full-size copy when the buffer is already 4-byte aligned
+    // (the common case for large, unpooled reads) — view it in place.
+    if (buf.byteOffset % 4 === 0) {
+      return new Float32Array(buf.buffer, buf.byteOffset, usableLen / 4);
+    }
+    const aligned = buf.buffer.slice(buf.byteOffset, buf.byteOffset + usableLen);
     return new Float32Array(aligned);
   } finally {
     await fsp.rm(tmp, { force: true }).catch(() => undefined);
@@ -401,9 +426,26 @@ export async function normalizeToVertical(input: string, output: string): Promis
       // Video-only: map the composited stream and drop audio entirely.
       command.outputOptions(["-map", "[v]", "-an"]);
       applyEncoder(command, encoder);
+      let timedOut = false;
+      const timer = setTimeout(() => {
+        timedOut = true;
+        try {
+          command.kill("SIGKILL");
+        } catch {
+          /* already gone */
+        }
+        reject(new Error(`Normalize timed out after ${env.renderTimeoutMs}ms (${encoder})`));
+      }, env.renderTimeoutMs);
       command
-        .on("error", (err) => reject(new Error(`Normalize failed (${encoder}): ${err.message}`)))
-        .on("end", () => resolve())
+        .on("error", (err) => {
+          clearTimeout(timer);
+          if (timedOut) return;
+          reject(new Error(`Normalize failed (${encoder}): ${err.message}`));
+        })
+        .on("end", () => {
+          clearTimeout(timer);
+          resolve();
+        })
         .save(output);
     });
 

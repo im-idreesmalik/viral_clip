@@ -66,9 +66,16 @@ export function nextGenericName(): string {
 
 /** Resolve a storage key to an absolute path, rejecting traversal. */
 export function resolveKey(key: string): string {
+  // Reject any key that tries to climb out — checked before normalization so a
+  // "..\\" or "../" segment can't be silently stripped and slip through.
+  if (/(^|[\\/])\.\.([\\/]|$)/.test(key)) {
+    throw new Error(`Invalid storage key (path traversal): ${key}`);
+  }
   const normalized = path.normalize(key).replace(/^(\.\.(\/|\\|$))+/, "");
   const abs = path.resolve(ROOT, normalized);
-  if (!abs.startsWith(ROOT)) {
+  // Require a path-separator boundary so a sibling dir sharing the prefix
+  // (e.g. "storage-evil") can't pass the containment check.
+  if (abs !== ROOT && !abs.startsWith(ROOT + path.sep)) {
     throw new Error(`Invalid storage key (path traversal): ${key}`);
   }
   return abs;

@@ -113,7 +113,13 @@ export async function processVideo(videoId: string): Promise<void> {
     // 4. Render clips — a few at a time so the CPU filters and the GPU encoder
     //    work in parallel instead of one clip blocking the next.
     await setStatus(videoId, VideoStatus.GENERATING);
-    const concurrency = Math.max(1, env.clipRenderConcurrency);
+    // On the GPU (NVENC) cap parallel encodes so we don't exceed the encoder's
+    // session limit or overload the driver; the CPU encoder can use the full count.
+    const isGpu = env.ffmpegVideoEncoder === "h264_nvenc";
+    const concurrency = Math.max(
+      1,
+      isGpu ? Math.min(env.clipRenderConcurrency, env.gpuRenderConcurrencyCap) : env.clipRenderConcurrency,
+    );
     for (let i = 0; i < createdClips.length; i += concurrency) {
       const batch = createdClips.slice(i, i + concurrency);
       await Promise.all(

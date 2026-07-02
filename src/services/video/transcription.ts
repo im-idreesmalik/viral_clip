@@ -215,9 +215,10 @@ export async function runTransformersInProcess(videoPath: string): Promise<Trans
     const c = chunks[i];
     const word = c.text.trim();
     if (!word) continue;
-    const start = c.timestamp[0] ?? 0;
+    const start = c.timestamp?.[0] ?? 0;
     // The final word in a chunk can have a null end; estimate from the next.
-    const end = c.timestamp[1] ?? chunks[i + 1]?.timestamp[0] ?? start + 0.4;
+    // Optional-chain every hop: a chunk may arrive with a missing timestamp.
+    const end = c.timestamp?.[1] ?? chunks[i + 1]?.timestamp?.[0] ?? start + 0.4;
     words.push({ start, end: Math.max(end, start + 0.05), word });
   }
 
@@ -344,7 +345,13 @@ async function transcribeLocal(videoPath: string): Promise<Transcript> {
       "--max-len", "1",
     ]);
 
-    const json = JSON.parse(await fsp.readFile(`${outBase}.json`, "utf8"));
+    const raw = await fsp.readFile(`${outBase}.json`, "utf8");
+    let json: WhisperCppJson;
+    try {
+      json = JSON.parse(raw) as WhisperCppJson;
+    } catch {
+      throw new Error("whisper.cpp produced invalid/partial JSON output.");
+    }
     return parseWhisperCppJson(json);
   } finally {
     await fsp.rm(tmpRoot, { recursive: true, force: true });

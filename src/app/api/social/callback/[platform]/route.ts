@@ -18,31 +18,34 @@ function redirectTo(path: string, params: Record<string, string>) {
 }
 
 // GET /api/social/callback/[platform] — OAuth redirect target.
+// This route is public (middleware-exempt), so the ENTIRE body is wrapped:
+// any throw (param parsing, getSession/Prisma, URL parsing) must resolve to a
+// controlled redirect, never an unhandled 500 / rejection.
 export async function GET(req: NextRequest, ctx: Ctx) {
-  const { platform: slug } = await ctx.params;
-  const platform = platformFromSlug(slug);
   const dest = "/dashboard/connections";
-
-  if (!platform) return redirectTo(dest, { error: "Unknown platform" });
-
-  const session = await getSession();
-  if (!session) return redirectTo("/login", { next: dest });
-
-  const url = new URL(req.url);
-  const code = url.searchParams.get("code");
-  const state = url.searchParams.get("state");
-  const oauthError = url.searchParams.get("error");
-
-  if (oauthError) return redirectTo(dest, { error: `${slug}: ${oauthError}` });
-  if (!code || !state) return redirectTo(dest, { error: "Missing code/state from provider." });
-
-  // Validate CSRF state against the cookie set at connect time.
-  const expected = req.cookies.get(`vc_oauth_${slug}`)?.value;
-  if (!expected || expected !== state) {
-    return redirectTo(dest, { error: "OAuth state mismatch. Please retry." });
-  }
-
+  let slug = "";
   try {
+    slug = (await ctx.params).platform;
+    const platform = platformFromSlug(slug);
+    if (!platform) return redirectTo(dest, { error: "Unknown platform" });
+
+    const session = await getSession();
+    if (!session) return redirectTo("/login", { next: dest });
+
+    const url = new URL(req.url);
+    const code = url.searchParams.get("code");
+    const state = url.searchParams.get("state");
+    const oauthError = url.searchParams.get("error");
+
+    if (oauthError) return redirectTo(dest, { error: `${slug}: ${oauthError}` });
+    if (!code || !state) return redirectTo(dest, { error: "Missing code/state from provider." });
+
+    // Validate CSRF state against the cookie set at connect time.
+    const expected = req.cookies.get(`vc_oauth_${slug}`)?.value;
+    if (!expected || expected !== state) {
+      return redirectTo(dest, { error: "OAuth state mismatch. Please retry." });
+    }
+
     const provider = getProvider(platform);
     // Must match the redirect URI used at authorize time. Both are derived from
     // the same request origin (the browser stays on one domain through the flow).

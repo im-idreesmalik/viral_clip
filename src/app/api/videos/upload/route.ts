@@ -5,6 +5,7 @@ import path from "node:path";
 import { ClipMode, FootageMode, VideoSource, VideoStatus } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { handler, created, requireSession, ApiError } from "@/lib/api";
+import { env } from "@/lib/env";
 import { resolveKey, ensureDirFor } from "@/lib/storage";
 import { enqueueProcessVideo } from "@/lib/queue";
 import { serializeVideo } from "@/lib/serialize";
@@ -30,9 +31,17 @@ const ALLOWED_EXT = new Set(["mp4", "mov", "mkv", "webm", "avi", "m4v"]);
 export const POST = handler(async (req) => {
   const session = await requireSession();
 
+  const contentLength = Number(req.headers.get("content-length") || 0);
+  if (contentLength && contentLength > env.maxUploadBytes) {
+    throw new ApiError(413, `File too large (max ${Math.round(env.maxUploadBytes / 1024 / 1024)} MB).`);
+  }
+
   const form = await req.formData();
   const file = form.get("file");
   if (!(file instanceof File)) throw new ApiError(400, "No file provided (field 'file').");
+  if (file.size > env.maxUploadBytes) {
+    throw new ApiError(413, `File too large (max ${Math.round(env.maxUploadBytes / 1024 / 1024)} MB).`);
+  }
 
   const ext = (path.extname(file.name).slice(1) || "mp4").toLowerCase();
   if (!ALLOWED_EXT.has(ext)) {

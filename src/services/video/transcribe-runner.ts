@@ -6,7 +6,9 @@
  * Usage: node --import tsx transcribe-runner.ts <videoPath> <outJsonPath>
  * Writes the transcript JSON to <outJsonPath> and exits 0 on success.
  */
-import "@/workers/loadEnv";
+// Relative import (not the @/ alias) so the spawned process doesn't depend on
+// tsconfig path resolution being available in the child's context.
+import "../../workers/loadEnv";
 import fsp from "node:fs/promises";
 import { runTransformersInProcess } from "./transcription";
 

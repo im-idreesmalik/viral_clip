@@ -9,6 +9,9 @@
  */
 import IORedis, { type RedisOptions } from "ioredis";
 import { env } from "./env";
+import { createLogger } from "./logger";
+
+const log = createLogger("redis");
 
 const options: RedisOptions = {
   maxRetriesPerRequest: null,
@@ -16,5 +19,11 @@ const options: RedisOptions = {
 };
 
 export function createRedisConnection(): IORedis {
-  return new IORedis(env.redisUrl, options);
+  const conn = new IORedis(env.redisUrl, options);
+  // Without an "error" listener, ioredis emits an unhandled 'error' event on a
+  // disconnect, which can crash the process. Log and let it auto-reconnect.
+  conn.on("error", (err) => {
+    log.warn("Redis connection error", { message: err instanceof Error ? err.message : String(err) });
+  });
+  return conn;
 }

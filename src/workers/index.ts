@@ -57,6 +57,22 @@ async function reapStuckJobs() {
 }
 
 async function main() {
+  // Last line of defense: a stray unhandled rejection or uncaught exception
+  // would otherwise terminate the whole worker (Node ≥15) and kill every
+  // in-flight job. Log and keep running — individual jobs already fail safely.
+  process.on("unhandledRejection", (reason) => {
+    log.error("Unhandled promise rejection (kept worker alive)", {
+      message: reason instanceof Error ? reason.message : String(reason),
+      stack: reason instanceof Error ? reason.stack : undefined,
+    });
+  });
+  process.on("uncaughtException", (err) => {
+    log.error("Uncaught exception (kept worker alive)", {
+      message: err.message,
+      stack: err.stack,
+    });
+  });
+
   ensureStorageRoot();
 
   const videoWorker = startVideoWorker();

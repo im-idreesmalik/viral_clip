@@ -4,6 +4,7 @@ import { pipeline } from "node:stream/promises";
 import fsp from "node:fs/promises";
 import path from "node:path";
 import { handler, ok, created, requireSession, ApiError } from "@/lib/api";
+import { env } from "@/lib/env";
 import { listGenericFootage, nextGenericName, resolveKey, ensureDirFor } from "@/lib/storage";
 import { normalizeToVertical } from "@/services/video/ffmpeg";
 
@@ -12,6 +13,18 @@ export const runtime = "nodejs";
 export const maxDuration = 300;
 
 const ALLOWED_EXT = new Set(["mp4", "mov", "mkv", "webm", "avi", "m4v"]);
+
+// Serialize in-request transcodes so multiple concurrent uploads can't spawn
+// multiple ffmpeg processes and saturate the web server's CPU/GPU.
+let transcodeChain: Promise<unknown> = Promise.resolve();
+function runExclusive<T>(fn: () => Promise<T>): Promise<T> {
+  const result = transcodeChain.then(fn, fn);
+  transcodeChain = result.then(
+    () => undefined,
+    () => undefined,
+  );
+  return result;
+}
 
 // GET /api/generic — list the generic/stock footage in storage/generic.
 export const GET = handler(async () => {
@@ -36,9 +49,18 @@ export const GET = handler(async () => {
 export const POST = handler(async (req) => {
   await requireSession();
 
+  // Reject oversized uploads up front (before reading the body) to protect disk.
+  const contentLength = Number(req.headers.get("content-length") || 0);
+  if (contentLength && contentLength > env.maxUploadBytes) {
+    throw new ApiError(413, `File too large (max ${Math.round(env.maxUploadBytes / 1024 / 1024)} MB).`);
+  }
+
   const form = await req.formData();
   const file = form.get("file");
   if (!(file instanceof File)) throw new ApiError(400, "No file provided (field 'file').");
+  if (file.size > env.maxUploadBytes) {
+    throw new ApiError(413, `File too large (max ${Math.round(env.maxUploadBytes / 1024 / 1024)} MB).`);
+  }
 
   const ext = (path.extname(file.name).slice(1) || "mp4").toLowerCase();
   if (!ALLOWED_EXT.has(ext)) {
@@ -62,9 +84,10 @@ export const POST = handler(async (req) => {
   await pipeline(nodeStream, createWriteStream(tmpPath));
 
   // 2. Transcode to a 1080x1920 (9:16) vertical MP4 so every generic clip is
-  //    vertical before it's ever used. Always clean up the temp file.
+  //    vertical before it's ever used. Serialized + timed-out inside
+  //    normalizeToVertical. Always clean up the temp file.
   try {
-    await normalizeToVertical(tmpPath, outPath);
+    await runExclusive(() => normalizeToVertical(tmpPath, outPath));
   } finally {
     await fsp.rm(tmpPath, { force: true }).catch(() => undefined);
   }

@@ -42,6 +42,10 @@ async function runYtDlp(args: string[]): Promise<string> {
   try {
     const { stdout } = await execFileAsync(ytDlpBinary(), args, {
       maxBuffer: 1024 * 1024 * 256,
+      // Hard wall-clock timeout so a livestream / stalled fragment can't hang
+      // the job forever and orphan the process. execFile kills it on timeout.
+      timeout: env.downloadTimeoutMs,
+      killSignal: "SIGKILL",
     });
     return stdout;
   } catch (err) {
@@ -84,7 +88,14 @@ async function fetchMetadata(url: string): Promise<FetchMetadata> {
     "--no-playlist",
     "--no-check-certificates",
   ]);
-  const info = JSON.parse(stdout) as Record<string, unknown>;
+  let info: Record<string, unknown>;
+  try {
+    info = JSON.parse(stdout) as Record<string, unknown>;
+  } catch {
+    // yt-dlp can emit non-JSON (a warning line, empty output) for private /
+    // region-blocked / age-gated videos — don't let that throw a SyntaxError.
+    throw new Error("yt-dlp returned no usable metadata (private, blocked, or unavailable video?).");
+  }
   return {
     title: String(info.title ?? "Untitled video"),
   };

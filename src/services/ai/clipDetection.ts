@@ -100,40 +100,52 @@ async function runOllama(system: string, userMessage: string): Promise<string> {
     baseUrl: env.ollama.baseUrl,
   });
 
-  let res: Response;
+  // Abort if Ollama hangs, so a stuck LLM call can't pin the job forever
+  // (on abort/failure the caller falls back to plain segmentation).
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), env.aiTimeoutMs);
   try {
-    res = await fetch(`${env.ollama.baseUrl.replace(/\/$/, "")}/api/chat`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        model: env.ollama.model,
-        stream: false,
-        // Ollama structured outputs: pass the JSON Schema as `format` (v0.5+).
-        format: OUTPUT_JSON_SCHEMA,
-        options: { temperature: 0.4, num_ctx: env.ollama.numCtx },
-        messages: [
-          { role: "system", content: system },
-          { role: "user", content: userMessage },
-        ],
-      }),
-    });
-  } catch (err) {
-    throw new Error(
-      `Could not reach Ollama at ${env.ollama.baseUrl}. Is it running (\`ollama serve\`) and is the model pulled (\`ollama pull ${env.ollama.model}\`)? ${
-        err instanceof Error ? err.message : err
-      }`,
-    );
-  }
+    let res: Response;
+    try {
+      res = await fetch(`${env.ollama.baseUrl.replace(/\/$/, "")}/api/chat`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        signal: controller.signal,
+        body: JSON.stringify({
+          model: env.ollama.model,
+          stream: false,
+          // Ollama structured outputs: pass the JSON Schema as `format` (v0.5+).
+          format: OUTPUT_JSON_SCHEMA,
+          options: { temperature: 0.4, num_ctx: env.ollama.numCtx },
+          messages: [
+            { role: "system", content: system },
+            { role: "user", content: userMessage },
+          ],
+        }),
+      });
+    } catch (err) {
+      if (controller.signal.aborted) {
+        throw new Error(`Ollama timed out after ${env.aiTimeoutMs}ms.`);
+      }
+      throw new Error(
+        `Could not reach Ollama at ${env.ollama.baseUrl}. Is it running (\`ollama serve\`) and is the model pulled (\`ollama pull ${env.ollama.model}\`)? ${
+          err instanceof Error ? err.message : err
+        }`,
+      );
+    }
 
-  if (!res.ok) {
-    const body = await res.text().catch(() => "");
-    throw new Error(`Ollama error ${res.status}: ${body.slice(0, 300)}`);
-  }
+    if (!res.ok) {
+      const body = await res.text().catch(() => "");
+      throw new Error(`Ollama error ${res.status}: ${body.slice(0, 300)}`);
+    }
 
-  const json = await res.json();
-  const content = json?.message?.content;
-  if (!content) throw new Error("Ollama returned an empty response.");
-  return content;
+    const json = await res.json();
+    const content = json?.message?.content;
+    if (!content) throw new Error("Ollama returned an empty response.");
+    return content;
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 // ---- Cloud provider: Anthropic Claude ------------------------------------
