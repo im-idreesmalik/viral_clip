@@ -30,10 +30,38 @@ export function listGenericFootage(): string[] {
     return fs
       .readdirSync(GENERIC_DIR)
       .filter((f) => GENERIC_VIDEO_EXTS.has(path.extname(f).toLowerCase()))
+      .sort(compareGenericNames)
       .map((f) => path.join(GENERIC_DIR, f));
   } catch {
     return [];
   }
+}
+
+/** Sort numeric names naturally (1, 2, …, 10) with any others after them. */
+function compareGenericNames(a: string, b: string): number {
+  const na = parseInt(a, 10);
+  const nb = parseInt(b, 10);
+  const aNum = /^\d+\./.test(a);
+  const bNum = /^\d+\./.test(b);
+  if (aNum && bNum) return na - nb;
+  if (aNum) return -1;
+  if (bNum) return 1;
+  return a.localeCompare(b);
+}
+
+/**
+ * The next sequential generic filename ("1.mp4", "2.mp4", …). Picks one past
+ * the highest existing number and skips any name already on disk, so uploads
+ * stay ordered without the user naming them.
+ */
+export function nextGenericName(): string {
+  let n = 1;
+  for (const p of listGenericFootage()) {
+    const m = parseInt(path.basename(p), 10);
+    if (!isNaN(m) && m >= n) n = m + 1;
+  }
+  while (fs.existsSync(path.join(GENERIC_DIR, `${n}.mp4`))) n++;
+  return `${n}.mp4`;
 }
 
 /** Resolve a storage key to an absolute path, rejecting traversal. */

@@ -4,7 +4,7 @@ import { pipeline } from "node:stream/promises";
 import fsp from "node:fs/promises";
 import path from "node:path";
 import { handler, ok, created, requireSession, ApiError } from "@/lib/api";
-import { listGenericFootage, resolveKey, ensureDirFor } from "@/lib/storage";
+import { listGenericFootage, nextGenericName, resolveKey, ensureDirFor } from "@/lib/storage";
 import { normalizeToVertical } from "@/services/video/ffmpeg";
 
 // Streaming uploads of (potentially large) generic footage.
@@ -45,19 +45,13 @@ export const POST = handler(async (req) => {
     throw new ApiError(400, `Unsupported type .${ext}. Allowed: ${[...ALLOWED_EXT].join(", ")}`);
   }
 
-  // Stored file is always a normalized vertical .mp4, so derive a safe base name
-  // and force the .mp4 extension.
-  const base =
-    path
-      .basename(file.name)
-      .replace(/\.[^.]+$/, "")
-      .replace(/[^\w.\- ]+/g, "_")
-      .trim() || `generic-${file.size}`;
-  const safe = `${base}.mp4`;
+  // Stored file is always a normalized vertical .mp4, auto-named in sequence
+  // (1.mp4, 2.mp4, …) so the library stays ordered without the user naming it.
+  const safe = nextGenericName();
   const key = `generic/${safe}`;
   // Temp lands with a non-video extension so it's ignored by the footage lister
   // while the upload + transcode are in flight.
-  const tmpKey = `generic/.uploading-${base}-${file.size}.part`;
+  const tmpKey = `generic/.uploading-${safe}-${file.size}.part`;
   await ensureDirFor(key);
 
   const tmpPath = resolveKey(tmpKey);

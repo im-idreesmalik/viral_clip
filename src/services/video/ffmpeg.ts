@@ -365,26 +365,20 @@ export async function renderClip(opts: RenderClipOptions): Promise<void> {
 }
 
 /**
- * Convert any video into a 1080x1920 (9:16) MP4 with the blurred-fill
+ * Convert any video into a SILENT 1080x1920 (9:16) MP4 with the blurred-fill
  * background. Used to normalize uploaded generic/stock footage so every clip
- * in the library is vertical before it's ever used. Clips that are already 9:16
- * simply fill the frame (the blurred background stays hidden behind them).
+ * in the library is vertical (and audio-free) before it's ever used — GENERIC
+ * mode keeps the ORIGINAL video's audio, so the stock clip's own audio is
+ * dropped. Clips that are already 9:16 simply fill the frame (the blurred
+ * background stays hidden behind them).
  */
 export async function normalizeToVertical(input: string, output: string): Promise<void> {
-  const meta = await probe(input).catch(() => null);
-  const hasAudio = meta?.hasAudio ?? false;
-
   const runRender = (encoder: string): Promise<void> =>
     new Promise((resolve, reject) => {
       const command = ffmpeg(input);
-      let filter = buildVerticalFilter({});
-      const maps = ["-map", "[v]"];
-      if (hasAudio) {
-        filter += `;[0:a]${LOUDNORM}[aout]`;
-        maps.push("-map", "[aout]");
-      }
-      command.complexFilter(filter);
-      command.outputOptions(maps);
+      command.complexFilter(buildVerticalFilter({}));
+      // Video-only: map the composited stream and drop audio entirely.
+      command.outputOptions(["-map", "[v]", "-an"]);
       applyEncoder(command, encoder);
       command
         .on("error", (err) => reject(new Error(`Normalize failed (${encoder}): ${err.message}`)))
