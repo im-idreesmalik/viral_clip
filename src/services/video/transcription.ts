@@ -338,7 +338,9 @@ async function transcribeLocal(videoPath: string, language?: string): Promise<Tr
     await extractAudio(videoPath, wavPath);
 
     const outBase = path.join(tmpRoot, "out");
-    // whisper.cpp: -oj writes JSON; --max-len 1 yields token/word-level segments.
+    // whisper.cpp: -oj writes JSON. --max-len 1 + --split-on-word yields ONE
+    // WHOLE WORD per segment. -sow is essential: without it Urdu/Arabic split
+    // into sub-word tokens that, joined with spaces, break letter-joining.
     // -l sets the language ("auto" detects it — needs a multilingual model).
     // Hard timeout so a stuck CLI can't hang the job; killed on overrun.
     await execFileAsync(
@@ -350,6 +352,7 @@ async function transcribeLocal(videoPath: string, language?: string): Promise<Tr
         "-oj",
         "-of", outBase,
         "--max-len", "1",
+        "--split-on-word",
       ],
       { timeout: env.transcribeTimeoutMs, killSignal: "SIGKILL", maxBuffer: 1024 * 1024 * 64 },
     );
