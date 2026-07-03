@@ -1,10 +1,12 @@
 import Link from "next/link";
+import { BrandMark } from "@/components/BrandMark";
 
 // Public marketing landing page. This is the app's official website — used as
 // the "Web/Desktop URL" for platform (TikTok/YouTube/Meta) app review, and it
 // links to the Terms of Service and Privacy Policy those reviews require.
 export const metadata = {
-  title: "ViralCut — Turn long videos into viral short clips",
+  // Must equal the app name exactly (TikTok/Meta review requirement).
+  title: "ViralCut",
   description:
     "ViralCut converts long-form videos into ready-to-post vertical clips for TikTok, Instagram Reels, Facebook Reels, and YouTube Shorts — with AI clip detection, auto captions, and scheduled publishing.",
 };
@@ -32,7 +34,9 @@ export default function LandingPage() {
       <header className="sticky top-0 z-30 border-b border-ink-800/60 bg-ink-950/70 backdrop-blur-md">
         <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-3.5">
           <div className="flex items-center gap-2">
-            <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-brand-gradient text-lg shadow-glow-sm">✂️</span>
+            <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-brand-gradient text-white shadow-glow-sm">
+              <BrandMark className="h-5 w-5" />
+            </span>
             <span className="text-lg font-semibold tracking-tight">ViralCut</span>
           </div>
           <nav className="flex items-center gap-1 text-sm sm:gap-3">

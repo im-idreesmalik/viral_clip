@@ -4,6 +4,7 @@ import Link, { useLinkStatus } from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useState } from "react";
 import clsx from "clsx";
+import { BrandMark } from "@/components/BrandMark";
 
 /** Spinner shown on a nav item while its route is loading (Next useLinkStatus). */
 function NavSpinner() {
@@ -45,7 +46,7 @@ export function Sidebar({ user }: { user: { name: string | null; email: string }
       className="flex items-center gap-2 rounded-lg px-1 py-1"
     >
       <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-brand-gradient text-white shadow-glow-sm">
-        <Icon name="content_cut" className="text-[20px]" />
+        <BrandMark className="h-5 w-5" />
       </span>
       <span>
         <span className="block text-lg font-semibold leading-none tracking-tight text-ink-100">ViralCut</span>

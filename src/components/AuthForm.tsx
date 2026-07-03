@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { BrandMark } from "@/components/BrandMark";
 
 export function AuthForm({ mode }: { mode: "login" | "register" }) {
   const router = useRouter();
@@ -41,9 +42,9 @@ export function AuthForm({ mode }: { mode: "login" | "register" }) {
         <div className="mb-8 text-center">
           <Link
             href="/"
-            className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-brand-gradient text-2xl shadow-glow-sm transition-transform hover:scale-105"
+            className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-brand-gradient text-white shadow-glow-sm transition-transform hover:scale-105"
           >
-            ✂️
+            <BrandMark className="h-8 w-8" />
           </Link>
           <h1 className="text-2xl font-semibold">ViralCut</h1>
           <p className="mt-1 text-sm text-ink-100/60">

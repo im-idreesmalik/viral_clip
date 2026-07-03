@@ -11,7 +11,10 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "ViralCut — Long-form to viral shorts",
+  // Tab/homepage title must equal the app name EXACTLY for TikTok/Meta review:
+  // default is "ViralCut"; other pages render "<page> · ViralCut".
+  title: { default: "ViralCut", template: "%s · ViralCut" },
+  applicationName: "ViralCut",
   description:
     "Turn long-form videos into viral short-form clips for TikTok, Reels, and Shorts — with AI clip detection, auto captions, and scheduled publishing.",
   // TikTok "URL properties" meta-tag verification. Set TIKTOK_URL_VERIFICATION
