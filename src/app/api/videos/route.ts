@@ -27,6 +27,7 @@ const createSchema = z.object({
   targetClipCount: z.number().int().min(1).max(30).default(8),
   burnCaptions: z.boolean().default(true),
   footageMode: z.nativeEnum(FootageMode).default(FootageMode.ORIGINAL),
+  language: z.string().max(10).default("auto"),
   title: z.string().max(200).optional(),
 });
 
@@ -52,6 +53,7 @@ export const POST = handler(async (req) => {
       targetClipCount: body.targetClipCount,
       burnCaptions: body.burnCaptions,
       footageMode: body.footageMode,
+      language: body.language,
     },
   });
 

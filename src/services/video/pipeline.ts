@@ -70,7 +70,7 @@ export async function processVideo(videoId: string): Promise<void> {
     await setStatus(videoId, VideoStatus.TRANSCRIBING);
     let transcript = (video.transcript as unknown as Transcript | null) ?? null;
     if (!transcript) {
-      transcript = await transcribe(sourcePath);
+      transcript = await transcribe(sourcePath, video.language);
       if (transcript) {
         await prisma.video.update({
           where: { id: videoId },

@@ -5,6 +5,29 @@ import { api } from "@/lib/client";
 import type { ClipMode } from "@/lib/types";
 import { useToast } from "@/components/ui/Toast";
 
+// Spoken-language options for transcription. "auto" lets Whisper detect, but
+// close languages (Urdu vs Hindi) are often mis-detected — so pick explicitly.
+const LANGUAGES: { code: string; label: string }[] = [
+  { code: "auto", label: "Auto-detect" },
+  { code: "en", label: "English" },
+  { code: "ur", label: "Urdu" },
+  { code: "hi", label: "Hindi" },
+  { code: "pa", label: "Punjabi" },
+  { code: "ar", label: "Arabic" },
+  { code: "ps", label: "Pashto" },
+  { code: "bn", label: "Bengali" },
+  { code: "fa", label: "Persian" },
+  { code: "es", label: "Spanish" },
+  { code: "fr", label: "French" },
+  { code: "de", label: "German" },
+  { code: "pt", label: "Portuguese" },
+  { code: "ru", label: "Russian" },
+  { code: "tr", label: "Turkish" },
+  { code: "id", label: "Indonesian" },
+  { code: "zh", label: "Chinese" },
+  { code: "ja", label: "Japanese" },
+];
+
 export function NewVideoPanel({ onCreated }: { onCreated: () => void }) {
   const [tab, setTab] = useState<"url" | "upload">("url");
   const [url, setUrl] = useState("");
@@ -14,6 +37,7 @@ export function NewVideoPanel({ onCreated }: { onCreated: () => void }) {
   const [segmentSeconds, setSegmentSeconds] = useState(45);
   const [targetClipCount, setTargetClipCount] = useState(8);
   const [burnCaptions, setBurnCaptions] = useState(true);
+  const [language, setLanguage] = useState("auto");
   const [footageMode, setFootageMode] = useState<"ORIGINAL" | "GENERIC">("ORIGINAL");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -37,6 +61,7 @@ export function NewVideoPanel({ onCreated }: { onCreated: () => void }) {
             targetClipCount,
             burnCaptions,
             footageMode,
+            language,
           }),
         });
         setUrl("");
@@ -66,6 +91,7 @@ export function NewVideoPanel({ onCreated }: { onCreated: () => void }) {
       form.append("targetClipCount", String(targetClipCount));
       form.append("burnCaptions", String(burnCaptions));
       form.append("footageMode", footageMode);
+      form.append("language", language);
 
       const xhr = new XMLHttpRequest();
       xhr.open("POST", "/api/videos/upload");
@@ -193,6 +219,26 @@ export function NewVideoPanel({ onCreated }: { onCreated: () => void }) {
             </p>
           </div>
         )}
+      </div>
+
+      {/* Spoken language (for transcription + captions) */}
+      <div className="mt-4">
+        <label className="label">Spoken language</label>
+        <select
+          className="input"
+          value={language}
+          onChange={(e) => setLanguage(e.target.value)}
+        >
+          {LANGUAGES.map((l) => (
+            <option key={l.code} value={l.code}>
+              {l.label}
+            </option>
+          ))}
+        </select>
+        <p className="mt-1 text-xs text-ink-100/50">
+          Pick the language spoken in the video. Auto-detect can confuse similar languages
+          (e.g. Urdu vs Hindi) — choosing it directly is more accurate.
+        </p>
       </div>
 
       {/* Captions toggle */}

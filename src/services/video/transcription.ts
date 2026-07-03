@@ -44,7 +44,7 @@ export interface Transcript {
 // Keep each Whisper API chunk well under the 25MB limit (~64kbps mono mp3).
 const CHUNK_SECONDS = 20 * 60;
 
-export async function transcribe(videoPath: string): Promise<Transcript | null> {
+export async function transcribe(videoPath: string, language?: string): Promise<Transcript | null> {
   const provider = env.transcriptionProvider;
   if (provider === "none") {
     log.warn("TRANSCRIPTION_PROVIDER=none; skipping transcription.");
@@ -53,7 +53,7 @@ export async function transcribe(videoPath: string): Promise<Transcript | null> 
   try {
     if (provider === "transformers") return await transcribeTransformers(videoPath);
     if (provider === "openai") return await transcribeOpenAI(videoPath);
-    if (provider === "local") return await transcribeLocal(videoPath);
+    if (provider === "local") return await transcribeLocal(videoPath, language);
   } catch (err) {
     log.error("Transcription failed; continuing without transcript", {
       message: err instanceof Error ? err.message : String(err),
@@ -326,10 +326,12 @@ async function callWhisperApi(audioPath: string): Promise<WhisperApiResponse> {
 // Local whisper.cpp CLI
 // --------------------------------------------------------------------------
 
-async function transcribeLocal(videoPath: string): Promise<Transcript> {
+async function transcribeLocal(videoPath: string, language?: string): Promise<Transcript> {
   if (!env.whisperCli || !env.whisperModel) {
     throw new Error("WHISPER_CLI and WHISPER_MODEL are required for the local provider.");
   }
+  // Per-video language wins over the global default; "auto" lets whisper detect.
+  const lang = language || env.whisperLanguage || "auto";
   const tmpRoot = await fsp.mkdtemp(path.join(os.tmpdir(), "vc-stt-"));
   try {
     const wavPath = path.join(tmpRoot, "audio.wav");
@@ -344,7 +346,7 @@ async function transcribeLocal(videoPath: string): Promise<Transcript> {
       [
         "-m", env.whisperModel,
         "-f", wavPath,
-        "-l", env.whisperLanguage || "auto",
+        "-l", lang,
         "-oj",
         "-of", outBase,
         "--max-len", "1",

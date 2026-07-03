@@ -67,6 +67,7 @@ export const POST = handler(async (req) => {
       targetClipCount: clampInt(intField(form, "targetClipCount", 8), 1, 30),
       burnCaptions,
       footageMode,
+      language: (field(form, "language") || "auto").slice(0, 10),
     },
   });
 

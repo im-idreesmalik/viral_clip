@@ -103,6 +103,9 @@ model Video {
   segmentSeconds  Int      @default(45) // target clip length for FULL mode
   targetClipCount Int      @default(8) // soft cap on clips (VIRAL mode only)
   burnCaptions    Boolean  @default(true) // generate + burn in subtitles
+  // Transcription language: "auto" detects it, or an ISO code ("en","ur","hi",…).
+  // Set per-video because auto-detect confuses close languages (Urdu vs Hindi).
+  language        String   @default("auto")
   // ORIGINAL = use the source footage; GENERIC = replace visuals with random
   // stock clips from storage/generic while keeping the original audio.
   footageMode     FootageMode @default(ORIGINAL)
