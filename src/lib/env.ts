@@ -105,6 +105,12 @@ export const env = {
 
   videoWorkerConcurrency: int(process.env.VIDEO_WORKER_CONCURRENCY, 1),
   publishWorkerConcurrency: int(process.env.PUBLISH_WORKER_CONCURRENCY, 2),
+  // Auto-retry a failed publication in a sequential batch after this long if
+  // nobody clicked Retry, so one failure can't stall the rest of the queue.
+  publishAutoRetryAfterMs: int(process.env.PUBLISH_AUTO_RETRY_AFTER_MS, 5 * 60 * 1000),
+  // Give up auto-retrying once total attempts reach this (avoids looping on a
+  // permanently-broken publication, e.g. a disconnected account).
+  publishAutoRetryMax: int(process.env.PUBLISH_AUTO_RETRY_MAX, 5),
   // How many clips to render in parallel within one video job (CPU + GPU bound).
   clipRenderConcurrency: int(process.env.CLIP_RENDER_CONCURRENCY, 3),
 

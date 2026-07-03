@@ -1,18 +1,16 @@
 import { PublicationStatus } from "@prisma/client";
 import { prisma } from "@/lib/db";
-import { handler, created, requireSession, ApiError } from "@/lib/api";
+import { handler, ok, requireSession, ApiError } from "@/lib/api";
 import { enqueuePublish } from "@/lib/queue";
 import { getProvider } from "@/services/social";
 import { serializePublication } from "@/lib/serialize";
 
 type Ctx = { params: Promise<{ id: string }> };
 
-// POST /api/publications/[id]/retry — re-run a failed (or cancelled) publication.
-//
-// We create a FRESH publication (new id) for the same clip + account rather than
-// re-running the original. The publish queue keys jobs by `publish-<id>`, and the
-// original job is already COMPLETED in Redis (the publisher records a terminal
-// failure as a completed job), so re-using the same id would be silently ignored.
+// POST /api/publications/[id]/retry — re-run a failed (or cancelled) publication
+// IN PLACE (same record — no duplicate row). enqueuePublish clears the stale
+// queue job so the same publication id runs again; batch linkage is preserved
+// since we reuse the row, so a fixed clip resumes the sequential chain.
 export const POST = handler(async (_req, ctx: Ctx) => {
   const session = await requireSession();
   const { id } = await ctx.params;
@@ -34,21 +32,11 @@ export const POST = handler(async (_req, ctx: Ctx) => {
     throw new ApiError(400, `${provider.label} is not configured on this server.`);
   }
 
-  const publication = await prisma.publication.create({
-    data: {
-      userId: session.sub,
-      clipId: prev.clipId,
-      socialAccountId: prev.socialAccountId,
-      platform: prev.platform,
-      caption: prev.caption,
-      status: PublicationStatus.QUEUED,
-      // Preserve batch linkage so a fixed clip resumes the sequential chain.
-      batchId: prev.batchId,
-      batchSeq: prev.batchSeq,
-      batchIntervalMin: prev.batchIntervalMin,
-    },
+  const publication = await prisma.publication.update({
+    where: { id: prev.id },
+    data: { status: PublicationStatus.QUEUED, lastError: null, publishAt: null },
     include: { clip: true, socialAccount: true },
   });
   await enqueuePublish(publication.id, 0);
-  return created(serializePublication(publication));
+  return ok(serializePublication(publication));
 });

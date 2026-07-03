@@ -92,12 +92,15 @@ export async function enqueueRegenerateClip(clipId: string, variation = false) {
 }
 
 export async function enqueuePublish(publicationId: string, delayMs?: number) {
-  return getPublishQueue().add(
+  const queue = getPublishQueue();
+  const jobId = `publish-${publicationId}`;
+  // Remove any prior job with this id (a completed/failed one lingers in Redis)
+  // so re-enqueuing the SAME publication — e.g. on retry — actually runs again
+  // instead of being silently deduped. This lets retry reuse the same record.
+  await queue.remove(jobId).catch(() => undefined);
+  return queue.add(
     "publish",
     { publicationId },
-    {
-      jobId: `publish-${publicationId}`,
-      delay: delayMs && delayMs > 0 ? delayMs : undefined,
-    },
+    { jobId, delay: delayMs && delayMs > 0 ? delayMs : undefined },
   );
 }

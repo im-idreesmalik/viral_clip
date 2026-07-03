@@ -7,9 +7,10 @@
  */
 import "./loadEnv";
 
-import { VideoStatus, ClipStatus } from "@prisma/client";
+import { VideoStatus, ClipStatus, PublicationStatus } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { env } from "@/lib/env";
+import { enqueuePublish } from "@/lib/queue";
 import { ensureStorageRoot } from "@/lib/storage";
 import { createLogger } from "@/lib/logger";
 import { startVideoWorker } from "./videoProcessor";
@@ -56,6 +57,37 @@ async function reapStuckJobs() {
   }
 }
 
+/**
+ * Auto-retry a failed publication in a sequential "Publish All" batch if it's
+ * been stuck past the threshold and nobody clicked Retry — one transient
+ * failure shouldn't halt the rest of the queue forever. Capped by attempts so
+ * a permanently-broken publication eventually stops retrying.
+ */
+async function autoRetryStuckPublications() {
+  const cutoff = new Date(Date.now() - env.publishAutoRetryAfterMs);
+  try {
+    const stuck = await prisma.publication.findMany({
+      where: {
+        status: PublicationStatus.FAILED,
+        batchId: { not: null },
+        updatedAt: { lt: cutoff },
+        attempts: { lt: env.publishAutoRetryMax },
+      },
+      take: 25,
+    });
+    for (const p of stuck) {
+      await prisma.publication.update({
+        where: { id: p.id },
+        data: { status: PublicationStatus.QUEUED, lastError: null, publishAt: null },
+      });
+      await enqueuePublish(p.id, 0);
+      log.warn("Auto-retrying stuck batch publication", { id: p.id, attempts: p.attempts });
+    }
+  } catch (err) {
+    log.error("Auto-retry failed", { message: err instanceof Error ? err.message : String(err) });
+  }
+}
+
 async function main() {
   // Last line of defense: a stray unhandled rejection or uncaught exception
   // would otherwise terminate the whole worker (Node ≥15) and kill every
@@ -92,6 +124,7 @@ async function main() {
       });
     }
     await reapStuckJobs();
+    await autoRetryStuckPublications();
   };
   await tick();
   const schedulerTimer = setInterval(tick, SCHEDULER_INTERVAL_MS);
