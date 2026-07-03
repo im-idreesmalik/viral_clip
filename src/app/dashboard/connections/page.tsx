@@ -56,12 +56,12 @@ function ConnectionsContent() {
       </p>
 
       {connected && (
-        <div className="mb-4 rounded-lg bg-emerald-950/50 px-4 py-2 text-sm text-emerald-300">
+        <div className="mb-4 rounded-lg bg-emerald-500/10 px-4 py-2 text-sm text-emerald-700">
           Connected {PLATFORM_META[connected.toUpperCase()]?.label ?? connected} successfully.
         </div>
       )}
       {connectedError && (
-        <div className="mb-4 rounded-lg bg-red-950/50 px-4 py-2 text-sm text-red-300">
+        <div className="mb-4 rounded-lg bg-red-500/10 px-4 py-2 text-sm text-red-700">
           {connectedError}
         </div>
       )}
@@ -125,7 +125,7 @@ function ConnectionsContent() {
                           {showHandle ? ` (@${handle})` : ""}
                         </span>
                         <button
-                          className="btn-ghost text-xs text-red-300/80"
+                          className="btn-ghost text-xs text-red-600"
                           onClick={() => disconnect(a.id)}
                         >
                           Disconnect

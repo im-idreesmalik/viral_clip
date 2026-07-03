@@ -164,7 +164,7 @@ function Section({ title, children }: { title: string; children: React.ReactNode
   return (
     <section>
       <h2 className="mb-2 text-lg font-medium text-ink-100">{title}</h2>
-      <div className="space-y-2 text-sm leading-relaxed [&_a]:text-brand-400 [&_a:hover]:underline [&_ul]:list-disc [&_ul]:space-y-1 [&_ul]:pl-5">
+      <div className="space-y-2 text-sm leading-relaxed [&_a]:text-brand-600 [&_a:hover]:underline [&_ul]:list-disc [&_ul]:space-y-1 [&_ul]:pl-5">
         {children}
       </div>
     </section>

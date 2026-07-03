@@ -44,7 +44,7 @@ function ClipCardImpl({
   return (
     <div className="card overflow-hidden">
       {/* Preview (9:16) */}
-      <div className="relative aspect-[9/16] bg-ink-950">
+      <div className="relative aspect-[9/16] bg-neutral-950">
         {clip.videoUrl && clip.status !== "RENDERING" ? (
           <video
             src={clip.videoUrl}
@@ -132,7 +132,7 @@ function ClipCardImpl({
         )}
 
         {clip.status === "FAILED" && clip.errorMessage && (
-          <p className="line-clamp-2 text-xs text-red-300/80">{clip.errorMessage}</p>
+          <p className="line-clamp-2 text-xs text-red-600">{clip.errorMessage}</p>
         )}
 
         {/* Actions */}
@@ -198,7 +198,7 @@ function ClipCardImpl({
                 </a>
               )}
               <button
-                className="btn-ghost px-2 py-1 text-xs text-red-300/80"
+                className="btn-ghost px-2 py-1 text-xs text-red-600"
                 disabled={!!busy}
                 onClick={() => {
                   if (confirm("Delete this clip?"))

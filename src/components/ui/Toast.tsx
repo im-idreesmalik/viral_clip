@@ -54,7 +54,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
             role="status"
             className={`pointer-events-auto flex w-full max-w-sm animate-toast-in items-start gap-3 rounded-xl border px-4 py-3 text-sm shadow-card backdrop-blur-md ${KIND_STYLES[t.kind]}`}
           >
-            <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-white/10 text-[11px] font-bold">
+            <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-black/5 text-[11px] font-bold">
               {KIND_ICONS[t.kind]}
             </span>
             <span className="flex-1 leading-snug text-ink-100">{t.message}</span>
@@ -74,9 +74,9 @@ export function ToastProvider({ children }: { children: ReactNode }) {
 
 const KIND_ICONS: Record<ToastKind, string> = { success: "✓", error: "!", info: "i" };
 const KIND_STYLES: Record<ToastKind, string> = {
-  success: "border-emerald-500/40 bg-emerald-500/15",
-  error: "border-red-500/40 bg-red-500/15",
-  info: "border-brand-500/40 bg-brand-500/15",
+  success: "border-emerald-200 bg-emerald-50",
+  error: "border-red-200 bg-red-50",
+  info: "border-brand-200 bg-brand-50",
 };
 
 /**

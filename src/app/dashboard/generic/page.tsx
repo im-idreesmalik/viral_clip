@@ -136,7 +136,7 @@ export default function GenericPage() {
                 src={it.url}
                 controls
                 preload="metadata"
-                className="aspect-[9/16] w-full bg-ink-950 object-cover"
+                className="aspect-[9/16] w-full bg-neutral-950 object-cover"
               />
               <div className="p-3">
                 <div className="truncate text-sm font-medium" title={it.name}>

@@ -28,7 +28,14 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     // attributes on <html>/<body> before React hydrates, which otherwise
     // triggers a harmless hydration-mismatch warning.
     <html lang="en" className={inter.variable} suppressHydrationWarning>
-      <body className="min-h-screen font-sans antialiased" suppressHydrationWarning>
+      <head>
+        {/* Material Symbols icon font (matches the design system). */}
+        <link
+          rel="stylesheet"
+          href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&display=block"
+        />
+      </head>
+      <body className="min-h-screen bg-ink-950 font-sans text-ink-100 antialiased" suppressHydrationWarning>
         {children}
       </body>
     </html>

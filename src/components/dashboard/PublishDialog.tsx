@@ -70,7 +70,7 @@ export function PublishDialog({
         <h3 className="mb-4 text-lg font-semibold">Publish clip</h3>
 
         {done ? (
-          <p className="rounded-lg bg-emerald-950/50 px-3 py-2 text-sm text-emerald-300">
+          <p className="rounded-lg bg-emerald-500/10 px-3 py-2 text-sm text-emerald-700">
             {schedule ? "Scheduled!" : "Queued for publishing!"}
           </p>
         ) : accounts.length === 0 ? (
@@ -132,7 +132,7 @@ export function PublishDialog({
               />
             )}
 
-            {error && <p className="rounded-lg bg-red-950/50 px-3 py-2 text-sm text-red-300">{error}</p>}
+            {error && <p className="rounded-lg bg-red-500/10 px-3 py-2 text-sm text-red-700">{error}</p>}
 
             <div className="flex justify-end gap-2">
               <button className="btn-secondary" onClick={onClose} disabled={busy}>

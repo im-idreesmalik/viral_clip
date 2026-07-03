@@ -100,7 +100,7 @@ function VideoRow({ video, onDelete }: { video: VideoDTO; onDelete: () => void }
   return (
     <div className="card card-hover flex items-center gap-4 p-3">
       <Link href={`/dashboard/videos/${video.id}`} className="shrink-0">
-        <div className="flex h-16 w-28 items-center justify-center overflow-hidden rounded-lg bg-ink-950">
+        <div className="flex h-16 w-28 items-center justify-center overflow-hidden rounded-lg bg-neutral-950">
           {video.thumbnailUrl ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img src={video.thumbnailUrl} alt="" className="h-full w-full object-cover" />
@@ -135,7 +135,7 @@ function VideoRow({ video, onDelete }: { video: VideoDTO; onDelete: () => void }
           <span>{video.source === "YOUTUBE" ? "YouTube" : "Upload"}</span>
         </div>
         {video.status === "FAILED" && video.errorMessage && (
-          <p className="mt-1 truncate text-xs text-red-300/80">{video.errorMessage}</p>
+          <p className="mt-1 truncate text-xs text-red-600">{video.errorMessage}</p>
         )}
       </div>
 
@@ -143,7 +143,7 @@ function VideoRow({ video, onDelete }: { video: VideoDTO; onDelete: () => void }
         <Link href={`/dashboard/videos/${video.id}`} className="btn-secondary text-xs">
           Open
         </Link>
-        <button onClick={onDelete} className="btn-ghost text-xs text-red-300/80">
+        <button onClick={onDelete} className="btn-ghost text-xs text-red-600">
           Delete
         </button>
       </div>

@@ -91,7 +91,7 @@ export function AuthForm({ mode }: { mode: "login" | "register" }) {
           </div>
 
           {error && (
-            <p className="rounded-lg bg-red-950/50 px-3 py-2 text-sm text-red-300">{error}</p>
+            <p className="rounded-lg bg-red-500/10 px-3 py-2 text-sm text-red-700">{error}</p>
           )}
 
           <button type="submit" className="btn-primary w-full" disabled={loading}>
@@ -103,14 +103,14 @@ export function AuthForm({ mode }: { mode: "login" | "register" }) {
           {isRegister ? (
             <>
               Already have an account?{" "}
-              <Link href="/login" className="text-brand-400 hover:underline">
+              <Link href="/login" className="text-brand-600 hover:underline">
                 Sign in
               </Link>
             </>
           ) : (
             <>
               No account?{" "}
-              <Link href="/register" className="text-brand-400 hover:underline">
+              <Link href="/register" className="text-brand-600 hover:underline">
                 Create one
               </Link>
             </>

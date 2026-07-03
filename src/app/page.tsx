@@ -46,12 +46,12 @@ export default function LandingPage() {
       {/* Hero */}
       <main className="mx-auto max-w-6xl px-6">
         <section className="py-16 text-center sm:py-24">
-          <span className="badge animate-fade-in border border-brand-500/30 bg-brand-500/10 text-brand-100">
+          <span className="badge animate-fade-in border border-brand-500/30 bg-brand-500/10 text-brand-700">
             ✨ AI-powered short-form video
           </span>
           <h1 className="mx-auto mt-6 max-w-3xl animate-fade-up text-4xl font-semibold leading-[1.1] tracking-tight sm:text-6xl">
             Turn long videos into{" "}
-            <span className="bg-gradient-to-r from-brand-400 via-brand-300 to-accent bg-clip-text text-transparent">
+            <span className="bg-gradient-to-r from-brand-600 via-brand-500 to-accent-500 bg-clip-text text-transparent">
               viral short clips
             </span>
           </h1>

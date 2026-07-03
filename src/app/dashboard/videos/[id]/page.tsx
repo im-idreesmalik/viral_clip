@@ -116,7 +116,7 @@ export default function VideoDetailPage() {
       </Link>
 
       <div className="card mb-6 flex flex-col gap-4 p-5 sm:flex-row sm:items-start">
-        <div className="flex h-20 w-32 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-ink-950">
+        <div className="flex h-20 w-32 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-neutral-950">
           {video.thumbnailUrl ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img src={video.thumbnailUrl} alt="" className="h-full w-full object-cover" />
@@ -163,7 +163,7 @@ export default function VideoDetailPage() {
                   ✏️ Edit
                 </button>
               </div>
-              {video.hashtags && <p className="mt-1 text-sm text-brand-300">{video.hashtags}</p>}
+              {video.hashtags && <p className="mt-1 text-sm text-brand-600">{video.hashtags}</p>}
               <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-ink-400">
                 <VideoStatusBadge status={video.status} />
                 <span className="badge bg-ink-800 text-ink-300">
@@ -184,7 +184,7 @@ export default function VideoDetailPage() {
                 <span>{clips.length} clips</span>
               </div>
               {video.status === "FAILED" && video.errorMessage && (
-                <p className="mt-2 text-xs text-red-300/80">{video.errorMessage}</p>
+                <p className="mt-2 text-xs text-red-600">{video.errorMessage}</p>
               )}
             </>
           )}

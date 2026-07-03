@@ -83,7 +83,7 @@ export default function PublishingPage() {
             const meta = PLATFORM_META[p.platform];
             return (
               <div key={p.id} className="flex items-center gap-4 p-4">
-                <div className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-ink-950">
+                <div className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-neutral-950">
                   {p.clip?.thumbnailUrl ? (
                     // eslint-disable-next-line @next/next/no-img-element
                     <img src={p.clip.thumbnailUrl} alt="" className="h-full w-full object-cover" />
@@ -110,7 +110,7 @@ export default function PublishingPage() {
                     {p.attempts > 1 && <span>· {p.attempts} attempts</span>}
                   </div>
                   {p.lastError && p.status === "FAILED" && (
-                    <p className="mt-1 line-clamp-1 text-xs text-red-300/80">{p.lastError}</p>
+                    <p className="mt-1 line-clamp-1 text-xs text-red-600">{p.lastError}</p>
                   )}
                 </div>
                 <div className="flex shrink-0 items-center gap-3">
@@ -129,7 +129,7 @@ export default function PublishingPage() {
                       href={p.externalUrl}
                       target="_blank"
                       rel="noreferrer"
-                      className="text-xs text-brand-400 hover:underline"
+                      className="text-xs text-brand-600 hover:underline"
                     >
                       View ↗
                     </a>

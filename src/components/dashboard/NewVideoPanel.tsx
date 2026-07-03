@@ -253,7 +253,7 @@ export function NewVideoPanel({ onCreated }: { onCreated: () => void }) {
         </div>
       )}
 
-      {error && <p className="mt-4 rounded-lg bg-red-950/50 px-3 py-2 text-sm text-red-300">{error}</p>}
+      {error && <p className="mt-4 rounded-lg bg-red-500/10 px-3 py-2 text-sm text-red-700">{error}</p>}
 
       <button type="submit" className="btn-primary mt-5 w-full" disabled={busy}>
         {busy ? "Starting…" : "Generate clips"}

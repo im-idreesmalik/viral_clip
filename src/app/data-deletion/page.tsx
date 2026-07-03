@@ -28,7 +28,7 @@ export default function DataDeletionPage() {
         <h1 className="text-3xl font-semibold">Data Deletion Instructions</h1>
         <p className="mt-2 text-sm text-ink-100/50">Last updated: {LAST_UPDATED}</p>
 
-        <div className="mt-8 space-y-6 text-sm leading-relaxed text-ink-100/80 [&_a]:text-brand-400 [&_a:hover]:underline [&_ul]:list-disc [&_ul]:space-y-1 [&_ul]:pl-5">
+        <div className="mt-8 space-y-6 text-sm leading-relaxed text-ink-100/80 [&_a]:text-brand-600 [&_a:hover]:underline [&_ul]:list-disc [&_ul]:space-y-1 [&_ul]:pl-5">
           <p>
             {COMPANY} lets you connect social accounts (such as TikTok, YouTube, Instagram, and
             Facebook) and stores the data needed to operate the service — your account details, the

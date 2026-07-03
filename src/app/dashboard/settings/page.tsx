@@ -132,7 +132,7 @@ export default function SettingsPage() {
             <button className="btn-primary" onClick={saveHandle} disabled={savingHandle}>
               {savingHandle ? "Saving…" : "Save"}
             </button>
-            {handleSaved && <span className="text-sm text-emerald-300">✓</span>}
+            {handleSaved && <span className="text-sm text-emerald-700">✓</span>}
           </div>
         </div>
       </div>
@@ -212,7 +212,7 @@ export default function SettingsPage() {
                   >
                     <span>{meta?.icon}</span>
                     {meta?.label}
-                    {active && <span className="text-brand-400">✓</span>}
+                    {active && <span className="text-brand-600">✓</span>}
                   </button>
                 );
               })}
@@ -256,13 +256,13 @@ export default function SettingsPage() {
           </div>
         </div>
 
-        {error && <p className="rounded-lg bg-red-950/50 px-3 py-2 text-sm text-red-300">{error}</p>}
+        {error && <p className="rounded-lg bg-red-500/10 px-3 py-2 text-sm text-red-700">{error}</p>}
 
         <div className="flex items-center gap-3">
           <button className="btn-primary" onClick={save} disabled={saving}>
             {saving ? "Saving…" : "Save"}
           </button>
-          {saved && <span className="text-sm text-emerald-300">Saved ✓</span>}
+          {saved && <span className="text-sm text-emerald-700">Saved ✓</span>}
           {config.nextRunAt && config.enabled && (
             <span className="text-xs text-ink-100/50">
               Next run: {new Date(config.nextRunAt).toLocaleString()}

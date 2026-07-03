@@ -185,7 +185,7 @@ export function ReprocessDialog({
           </div>
         )}
 
-        {error && <p className="mt-4 rounded-lg bg-red-950/50 px-3 py-2 text-sm text-red-300">{error}</p>}
+        {error && <p className="mt-4 rounded-lg bg-red-500/10 px-3 py-2 text-sm text-red-700">{error}</p>}
 
         <div className="mt-6 flex gap-2">
           <button className="btn-primary flex-1" onClick={submit} disabled={busy}>

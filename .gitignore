@@ -15,6 +15,9 @@ next-env.d.ts
 /storage
 /tmp
 
+# uploaded design references (Stitch mockups) — not app code
+/UI UX
+
 # local binary tooling (whisper.cpp CUDA build + models — large, machine-specific)
 /tools/*
 # …but keep the small, redistributable caption fonts (needed for non-Latin subs)

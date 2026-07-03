@@ -101,7 +101,7 @@ export function PublishAllDialog({
                     >
                       <span>{meta?.icon}</span>
                       {meta?.label}
-                      {active && <span className="text-brand-400">✓</span>}
+                      {active && <span className="text-brand-600">✓</span>}
                     </button>
                   );
                 })}
@@ -145,7 +145,7 @@ export function PublishAllDialog({
               </p>
             </div>
 
-            {error && <p className="rounded-lg bg-red-950/50 px-3 py-2 text-sm text-red-300">{error}</p>}
+            {error && <p className="rounded-lg bg-red-500/10 px-3 py-2 text-sm text-red-700">{error}</p>}
 
             <div className="flex justify-end gap-2">
               <button className="btn-secondary" onClick={onClose} disabled={busy}>

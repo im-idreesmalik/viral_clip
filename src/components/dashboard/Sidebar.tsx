@@ -10,16 +10,21 @@ function NavSpinner() {
   const { pending } = useLinkStatus();
   if (!pending) return null;
   return (
-    <span className="ml-auto h-3.5 w-3.5 shrink-0 animate-spin rounded-full border-2 border-ink-500 border-t-brand-300" />
+    <span className="ml-auto h-3.5 w-3.5 shrink-0 animate-spin rounded-full border-2 border-ink-600 border-t-brand-600" />
   );
 }
 
+/** Material Symbols icon. */
+function Icon({ name, className }: { name: string; className?: string }) {
+  return <span className={clsx("material-symbols-outlined", className)}>{name}</span>;
+}
+
 const NAV = [
-  { href: "/dashboard", label: "Videos", icon: "🎬", exact: true },
-  { href: "/dashboard/connections", label: "Connections", icon: "🔗" },
-  { href: "/dashboard/publishing", label: "Publishing", icon: "📡" },
-  { href: "/dashboard/generic", label: "Generic", icon: "🎞️" },
-  { href: "/dashboard/settings", label: "Settings", icon: "⚙️" },
+  { href: "/dashboard", label: "Videos", icon: "video_library", exact: true },
+  { href: "/dashboard/connections", label: "Connections", icon: "hub" },
+  { href: "/dashboard/publishing", label: "Publishing", icon: "send" },
+  { href: "/dashboard/generic", label: "Generic", icon: "movie" },
+  { href: "/dashboard/settings", label: "Settings", icon: "settings" },
 ];
 
 export function Sidebar({ user }: { user: { name: string | null; email: string } }) {
@@ -39,10 +44,13 @@ export function Sidebar({ user }: { user: { name: string | null; email: string }
       onClick={() => setOpen(false)}
       className="flex items-center gap-2 rounded-lg px-1 py-1"
     >
-      <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-brand-gradient text-lg shadow-glow-sm">
-        ✂️
+      <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-brand-gradient text-white shadow-glow-sm">
+        <Icon name="content_cut" className="text-[20px]" />
       </span>
-      <span className="text-lg font-semibold tracking-tight">ViralCut</span>
+      <span>
+        <span className="block text-lg font-semibold leading-none tracking-tight text-ink-100">ViralCut</span>
+        <span className="block font-geist text-[10px] uppercase tracking-widest text-ink-400">Creator Suite</span>
+      </span>
     </Link>
   );
 
@@ -56,15 +64,16 @@ export function Sidebar({ user }: { user: { name: string | null; email: string }
             href={item.href}
             onClick={() => setOpen(false)}
             className={clsx(
-              "group flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-all",
+              "group flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-all",
               active
-                ? "bg-brand-500/15 text-brand-100 shadow-[inset_0_0_0_1px_rgba(124,92,255,0.25)]"
-                : "text-ink-300 hover:bg-ink-800 hover:text-ink-100",
+                ? "bg-brand-500/12 text-brand-700 shadow-[inset_0_0_0_1px_rgba(124,92,255,0.22)]"
+                : "text-ink-300 hover:bg-ink-800/70 hover:text-ink-100",
             )}
           >
-            <span className={clsx("text-base transition-transform group-hover:scale-110", active && "scale-110")}>
-              {item.icon}
-            </span>
+            <Icon
+              name={item.icon}
+              className={clsx("text-[20px] transition-transform group-hover:scale-110", active && "scale-110")}
+            />
             {item.label}
             <NavSpinner />
           </Link>
@@ -84,8 +93,8 @@ export function Sidebar({ user }: { user: { name: string | null; email: string }
           <div className="truncate text-xs text-ink-400">{user.email}</div>
         </div>
       </div>
-      <button onClick={signOut} className="btn-ghost mt-2 w-full justify-start text-sm">
-        ⏻ Sign out
+      <button onClick={signOut} className="btn-ghost mt-2 w-full justify-start gap-2 text-sm">
+        <Icon name="logout" className="text-[18px]" /> Sign out
       </button>
     </div>
   );
@@ -98,9 +107,9 @@ export function Sidebar({ user }: { user: { name: string | null; email: string }
         <button
           onClick={() => setOpen(true)}
           aria-label="Open menu"
-          className="btn-ghost h-9 w-9 px-0 text-lg"
+          className="btn-ghost h-9 w-9 px-0"
         >
-          ☰
+          <Icon name="menu" />
         </button>
       </header>
 
@@ -120,7 +129,7 @@ export function Sidebar({ user }: { user: { name: string | null; email: string }
                 aria-label="Close menu"
                 className="btn-ghost h-9 w-9 px-0"
               >
-                ✕
+                <Icon name="close" />
               </button>
             </div>
             {nav}

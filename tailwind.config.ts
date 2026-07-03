@@ -8,18 +8,20 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
+        // "Obsidian Kinetic Light" — the scale is inverted vs. a dark theme:
+        // ink-950 is the (lightest) page background, ink-100 is near-black text.
         ink: {
-          50: "#f5f5fa",
-          100: "#e8e8f0",
-          200: "#cfcfdd",
-          300: "#a9a9be",
-          400: "#76768e",
-          500: "#52526a",
-          600: "#3a3a4d",
-          700: "#262633",
-          800: "#1a1a24",
-          900: "#111118",
-          950: "#0a0a0f",
+          50: "#111118",
+          100: "#1b1b22", // on-surface (primary text)
+          200: "#2f2d3a",
+          300: "#484555", // on-surface-variant (secondary text)
+          400: "#6b6878", // muted text
+          500: "#797587", // outline / placeholder
+          600: "#a7a2b5",
+          700: "#c9c4d8", // outline-variant (borders)
+          800: "#e4e1eb", // surface-variant (raised chips)
+          900: "#f0edf7", // surface-container (panels)
+          950: "#fcf8ff", // page background
         },
         brand: {
           DEFAULT: "#7c5cff",
@@ -51,16 +53,20 @@ const config: Config = {
           "Arial",
           "sans-serif",
         ],
+        // Geist for labels/metadata (developer-tool precision).
+        geist: ["var(--font-geist)", "var(--font-sans)", "ui-sans-serif", "system-ui", "sans-serif"],
       },
       boxShadow: {
-        glow: "0 0 0 1px rgba(124,92,255,0.35), 0 8px 30px -8px rgba(124,92,255,0.45)",
-        "glow-sm": "0 4px 16px -6px rgba(124,92,255,0.5)",
-        card: "0 1px 0 0 rgba(255,255,255,0.03) inset, 0 8px 24px -16px rgba(0,0,0,0.7)",
-        "card-hover": "0 1px 0 0 rgba(255,255,255,0.05) inset, 0 16px 40px -20px rgba(0,0,0,0.8)",
+        // Ambient purple glow for primary/active elements.
+        glow: "0 0 0 1px rgba(124,92,255,0.25), 0 10px 30px -8px rgba(124,92,255,0.45)",
+        "glow-sm": "0 8px 20px -8px rgba(124,92,255,0.45)",
+        // Soft, light-theme card elevation (no heavy black shadows).
+        card: "0 1px 2px 0 rgba(17,17,24,0.04), 0 10px 26px -14px rgba(17,17,24,0.14)",
+        "card-hover": "0 2px 6px 0 rgba(17,17,24,0.06), 0 22px 44px -18px rgba(94,57,224,0.20)",
       },
       backgroundImage: {
-        "brand-gradient": "linear-gradient(135deg, #7c5cff 0%, #6442e6 100%)",
-        "brand-radial": "radial-gradient(60% 60% at 50% 0%, rgba(124,92,255,0.18) 0%, rgba(124,92,255,0) 100%)",
+        "brand-gradient": "linear-gradient(135deg, #7c5cff 0%, #5e39e0 100%)",
+        "brand-radial": "radial-gradient(60% 60% at 50% 0%, rgba(124,92,255,0.14) 0%, rgba(124,92,255,0) 100%)",
       },
       keyframes: {
         "fade-in": {
