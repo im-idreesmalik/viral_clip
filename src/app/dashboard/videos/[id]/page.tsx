@@ -5,6 +5,7 @@ import { useParams } from "next/navigation";
 import Link from "next/link";
 import { api, formatDuration } from "@/lib/client";
 import type { VideoDTO, ClipDTO } from "@/lib/types";
+import { languageLabel } from "@/lib/languages";
 import { VideoStatusBadge } from "@/components/dashboard/badges";
 import { ClipCard } from "@/components/dashboard/ClipCard";
 import { PublishAllDialog } from "@/components/dashboard/PublishAllDialog";
@@ -168,6 +169,15 @@ export default function VideoDetailPage() {
                 <span className="badge bg-ink-800 text-ink-300">
                   {video.clipMode === "VIRAL" ? "Viral-only" : "Full-video"}
                 </span>
+                {video.clipMode === "FULL" && (
+                  <span className="badge bg-ink-800 text-ink-300">
+                    {video.footageMode === "GENERIC" ? "Generic" : "Original"}
+                  </span>
+                )}
+                <span className="badge bg-ink-800 text-ink-300">
+                  {video.burnCaptions ? "Captions" : "No captions"}
+                </span>
+                <span className="badge bg-ink-800 text-ink-300">{languageLabel(video.language)}</span>
                 {video.durationSec ? <span>{formatDuration(video.durationSec)}</span> : null}
                 <span>{clips.length} clips</span>
               </div>

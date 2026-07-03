@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { api, formatDuration } from "@/lib/client";
 import type { VideoDTO } from "@/lib/types";
+import { languageLabel } from "@/lib/languages";
 import { NewVideoPanel } from "@/components/dashboard/NewVideoPanel";
 import { VideoStatusBadge } from "@/components/dashboard/badges";
 import { useToast } from "@/components/ui/Toast";
@@ -118,6 +119,15 @@ function VideoRow({ video, onDelete }: { video: VideoDTO; onDelete: () => void }
           <span className="badge bg-ink-800 text-ink-100/60">
             {video.clipMode === "VIRAL" ? "Viral-only" : "Full-video"}
           </span>
+          {video.clipMode === "FULL" && (
+            <span className="badge bg-ink-800 text-ink-100/60">
+              {video.footageMode === "GENERIC" ? "Generic" : "Original"}
+            </span>
+          )}
+          <span className="badge bg-ink-800 text-ink-100/60">
+            {video.burnCaptions ? "Captions" : "No captions"}
+          </span>
+          <span className="badge bg-ink-800 text-ink-100/60">{languageLabel(video.language)}</span>
           {video.durationSec ? <span>{formatDuration(video.durationSec)}</span> : null}
           {video.clipCount != null && <span>{video.clipCount} clips</span>}
           <span>{video.source === "YOUTUBE" ? "YouTube" : "Upload"}</span>

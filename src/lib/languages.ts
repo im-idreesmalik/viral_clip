@@ -23,3 +23,9 @@ export const LANGUAGES: { code: string; label: string }[] = [
   { code: "zh", label: "Chinese" },
   { code: "ja", label: "Japanese" },
 ];
+
+/** Human label for a language code (falls back to the uppercased code). */
+export function languageLabel(code: string | null | undefined): string {
+  if (!code) return "Auto-detect";
+  return LANGUAGES.find((l) => l.code === code)?.label ?? code.toUpperCase();
+}
