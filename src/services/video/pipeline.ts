@@ -39,9 +39,12 @@ export async function processVideo(videoId: string): Promise<void> {
       const destDir = resolveKey(`videos/${videoId}`);
       const result = await downloadVideo(video.sourceUrl!, destDir);
       storageKey = `videos/${videoId}/${path.basename(result.filePath)}`;
+      // Replace the "fetching title…" placeholder (or an empty title) with the
+      // real one from the download; keep a user-set title otherwise.
+      const isPlaceholderTitle = !video.title || /^YouTube import/i.test(video.title);
       await prisma.video.update({
         where: { id: videoId },
-        data: { storageKey, title: video.title || result.title },
+        data: { storageKey, title: isPlaceholderTitle ? result.title : video.title },
       });
     }
     if (!storageKey) throw new Error("No source media available for this video.");

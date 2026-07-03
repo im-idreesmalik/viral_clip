@@ -114,9 +114,9 @@ export default function GenericPage() {
       </div>
 
       {loading ? (
-        <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
+        <div className="grid grid-cols-3 gap-3 sm:grid-cols-4 lg:grid-cols-6">
           {[0, 1, 2, 3].map((i) => (
-            <div key={i} className="skeleton aspect-video" />
+            <div key={i} className="skeleton aspect-[9/16]" />
           ))}
         </div>
       ) : items.length === 0 ? (
@@ -128,7 +128,7 @@ export default function GenericPage() {
           </p>
         </div>
       ) : (
-        <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
+        <div className="grid grid-cols-3 gap-3 sm:grid-cols-4 lg:grid-cols-6">
           {items.map((it) => (
             <div key={it.name} className="card card-hover overflow-hidden">
               {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
@@ -136,7 +136,7 @@ export default function GenericPage() {
                 src={it.url}
                 controls
                 preload="metadata"
-                className="aspect-video w-full bg-ink-950 object-contain"
+                className="aspect-[9/16] w-full bg-ink-950 object-cover"
               />
               <div className="p-3">
                 <div className="truncate text-sm font-medium" title={it.name}>

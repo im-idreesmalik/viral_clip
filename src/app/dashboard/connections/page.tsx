@@ -112,11 +112,17 @@ function ConnectionsContent() {
 
                 {accountsForPlatform.length > 0 && (
                   <div className="mt-3 space-y-2 border-t border-ink-800 pt-3">
-                    {accountsForPlatform.map((a) => (
+                    {accountsForPlatform.map((a) => {
+                      // Some platforms (e.g. YouTube) already include the "@" in
+                      // the handle — strip it so we don't render "@@". Skip the
+                      // handle entirely when it just repeats the display name.
+                      const handle = a.username?.replace(/^@+/, "").trim();
+                      const showHandle = handle && handle !== a.displayName && !handle.includes(" ");
+                      return (
                       <div key={a.id} className="flex items-center justify-between text-sm">
                         <span className="truncate">
-                          {a.displayName || a.username || a.externalId}
-                          {a.username && a.displayName ? ` (@${a.username})` : ""}
+                          {a.displayName || handle || a.externalId}
+                          {showHandle ? ` (@${handle})` : ""}
                         </span>
                         <button
                           className="btn-ghost text-xs text-red-300/80"
@@ -125,7 +131,8 @@ function ConnectionsContent() {
                           Disconnect
                         </button>
                       </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 )}
               </div>

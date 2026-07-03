@@ -177,7 +177,9 @@ export default function VideoDetailPage() {
                 <span className="badge bg-ink-800 text-ink-300">
                   {video.burnCaptions ? "Captions" : "No captions"}
                 </span>
-                <span className="badge bg-ink-800 text-ink-300">{languageLabel(video.language)}</span>
+                {video.burnCaptions && (
+                  <span className="badge bg-ink-800 text-ink-300">{languageLabel(video.language)}</span>
+                )}
                 {video.durationSec ? <span>{formatDuration(video.durationSec)}</span> : null}
                 <span>{clips.length} clips</span>
               </div>

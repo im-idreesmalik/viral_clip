@@ -199,26 +199,6 @@ export function NewVideoPanel({ onCreated }: { onCreated: () => void }) {
         )}
       </div>
 
-      {/* Spoken language (for transcription + captions) */}
-      <div className="mt-4">
-        <label className="label">Spoken language</label>
-        <select
-          className="input"
-          value={language}
-          onChange={(e) => setLanguage(e.target.value)}
-        >
-          {LANGUAGES.map((l) => (
-            <option key={l.code} value={l.code}>
-              {l.label}
-            </option>
-          ))}
-        </select>
-        <p className="mt-1 text-xs text-ink-100/50">
-          Pick the language spoken in the video. Auto-detect can confuse similar languages
-          (e.g. Urdu vs Hindi) — choosing it directly is more accurate.
-        </p>
-      </div>
-
       {/* Captions toggle */}
       <label className="mt-4 flex items-center gap-2 text-sm">
         <input
@@ -229,6 +209,24 @@ export function NewVideoPanel({ onCreated }: { onCreated: () => void }) {
         />
         Add captions (subtitles)
       </label>
+
+      {/* Spoken language — only relevant when captions are generated. */}
+      {burnCaptions && (
+        <div className="mt-4">
+          <label className="label">Spoken language</label>
+          <select className="input" value={language} onChange={(e) => setLanguage(e.target.value)}>
+            {LANGUAGES.map((l) => (
+              <option key={l.code} value={l.code}>
+                {l.label}
+              </option>
+            ))}
+          </select>
+          <p className="mt-1 text-xs text-ink-100/50">
+            The language spoken in the video. Auto-detect can confuse similar languages
+            (e.g. Urdu vs Hindi) — choosing it directly is more accurate.
+          </p>
+        </div>
+      )}
 
       {clipMode === "FULL" && (
         <div className="mt-4">

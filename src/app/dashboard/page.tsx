@@ -127,7 +127,9 @@ function VideoRow({ video, onDelete }: { video: VideoDTO; onDelete: () => void }
           <span className="badge bg-ink-800 text-ink-100/60">
             {video.burnCaptions ? "Captions" : "No captions"}
           </span>
-          <span className="badge bg-ink-800 text-ink-100/60">{languageLabel(video.language)}</span>
+          {video.burnCaptions && (
+            <span className="badge bg-ink-800 text-ink-100/60">{languageLabel(video.language)}</span>
+          )}
           {video.durationSec ? <span>{formatDuration(video.durationSec)}</span> : null}
           {video.clipCount != null && <span>{video.clipCount} clips</span>}
           <span>{video.source === "YOUTUBE" ? "YouTube" : "Upload"}</span>

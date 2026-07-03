@@ -134,18 +134,6 @@ export function ReprocessDialog({
           )}
         </div>
 
-        {/* Language */}
-        <div className="mt-4">
-          <label className="label">Spoken language</label>
-          <select className="input" value={language} onChange={(e) => setLanguage(e.target.value)}>
-            {LANGUAGES.map((l) => (
-              <option key={l.code} value={l.code}>
-                {l.label}
-              </option>
-            ))}
-          </select>
-        </div>
-
         {/* Captions */}
         <label className="mt-4 flex items-center gap-2 text-sm">
           <input
@@ -156,6 +144,20 @@ export function ReprocessDialog({
           />
           Add captions (subtitles)
         </label>
+
+        {/* Language — only relevant when captions are generated. */}
+        {burnCaptions && (
+          <div className="mt-4">
+            <label className="label">Spoken language</label>
+            <select className="input" value={language} onChange={(e) => setLanguage(e.target.value)}>
+              {LANGUAGES.map((l) => (
+                <option key={l.code} value={l.code}>
+                  {l.label}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
 
         {/* Footage (Full-video only) */}
         {clipMode === "FULL" && (
