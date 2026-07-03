@@ -16,6 +16,7 @@ const schema = z
     targetClipCount: z.number().int().min(1).max(30).optional(),
     burnCaptions: z.boolean().optional(),
     footageMode: z.nativeEnum(FootageMode).optional(),
+    language: z.string().max(10).optional(),
   })
   .optional();
 
@@ -50,6 +51,7 @@ export const POST = handler(async (req, ctx: Ctx) => {
       targetClipCount: overrides?.targetClipCount ?? video.targetClipCount,
       burnCaptions: overrides?.burnCaptions ?? video.burnCaptions,
       footageMode: overrides?.footageMode ?? video.footageMode,
+      language: overrides?.language ?? video.language,
     },
   });
 

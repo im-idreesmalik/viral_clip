@@ -22,6 +22,7 @@ export function serializeVideo(v: Video & { clips?: Clip[] }) {
     targetClipCount: v.targetClipCount,
     burnCaptions: v.burnCaptions,
     footageMode: v.footageMode,
+    language: v.language,
     durationSec: v.durationSec,
     width: v.width,
     height: v.height,

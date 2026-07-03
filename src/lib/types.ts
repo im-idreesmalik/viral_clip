@@ -57,6 +57,7 @@ export interface VideoDTO {
   targetClipCount: number;
   burnCaptions: boolean;
   footageMode: "ORIGINAL" | "GENERIC";
+  language: string;
   durationSec: number | null;
   width: number | null;
   height: number | null;

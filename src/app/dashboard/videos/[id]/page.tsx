@@ -8,6 +8,7 @@ import type { VideoDTO, ClipDTO } from "@/lib/types";
 import { VideoStatusBadge } from "@/components/dashboard/badges";
 import { ClipCard } from "@/components/dashboard/ClipCard";
 import { PublishAllDialog } from "@/components/dashboard/PublishAllDialog";
+import { ReprocessDialog } from "@/components/dashboard/ReprocessDialog";
 import { useToast } from "@/components/ui/Toast";
 
 const VIDEO_PROCESSING = new Set([
@@ -22,7 +23,7 @@ export default function VideoDetailPage() {
   const { id } = useParams<{ id: string }>();
   const [video, setVideo] = useState<VideoDTO | null>(null);
   const [loading, setLoading] = useState(true);
-  const [reprocessing, setReprocessing] = useState(false);
+  const [showReprocess, setShowReprocess] = useState(false);
   const [showPublishAll, setShowPublishAll] = useState(false);
   const [editing, setEditing] = useState(false);
   const [titleDraft, setTitleDraft] = useState("");
@@ -81,20 +82,6 @@ export default function VideoDetailPage() {
       toast.error(err instanceof Error ? err.message : "Failed to save");
     } finally {
       setSavingMeta(false);
-    }
-  }
-
-  async function reprocess() {
-    if (!confirm("Reprocess this video? Existing clips will be replaced.")) return;
-    setReprocessing(true);
-    try {
-      await api(`/api/videos/${id}/process`, { method: "POST", body: JSON.stringify({}) });
-      toast.success("Reprocessing started");
-      await load();
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed to reprocess");
-    } finally {
-      setReprocessing(false);
     }
   }
 
@@ -197,8 +184,8 @@ export default function VideoDetailPage() {
               📡 Publish all
             </button>
           )}
-          <button className="btn-secondary" onClick={reprocess} disabled={reprocessing}>
-            {reprocessing ? "Reprocessing…" : "Reprocess"}
+          <button className="btn-secondary" onClick={() => setShowReprocess(true)}>
+            Reprocess
           </button>
         </div>
       </div>
@@ -232,6 +219,10 @@ export default function VideoDetailPage() {
           onClose={() => setShowPublishAll(false)}
           onScheduled={load}
         />
+      )}
+
+      {showReprocess && (
+        <ReprocessDialog video={video} onClose={() => setShowReprocess(false)} onDone={load} />
       )}
     </div>
   );
