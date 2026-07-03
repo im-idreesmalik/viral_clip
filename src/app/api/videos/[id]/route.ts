@@ -13,6 +13,7 @@ export const GET = handler(async (_req, ctx: Ctx) => {
 
   const video = await prisma.video.findFirst({
     where: { id, userId: session.sub },
+    omit: { transcript: true }, // large JSON, not needed by the client DTO
     include: {
       clips: {
         orderBy: [{ order: "asc" }, { viralScore: "desc" }, { startSec: "asc" }],

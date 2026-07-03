@@ -1,5 +1,14 @@
 import type { Metadata } from "next";
+import { Inter } from "next/font/google";
 import "./globals.css";
+
+// Self-hosted at build time (no runtime external request / CSP-safe). Exposed
+// as a CSS variable consumed by Tailwind's font-sans.
+const inter = Inter({
+  subsets: ["latin"],
+  variable: "--font-sans",
+  display: "swap",
+});
 
 export const metadata: Metadata = {
   title: "ViralCut — Long-form to viral shorts",
@@ -18,8 +27,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     // suppressHydrationWarning: browser extensions (e.g. Grammarly) inject
     // attributes on <html>/<body> before React hydrates, which otherwise
     // triggers a harmless hydration-mismatch warning.
-    <html lang="en" suppressHydrationWarning>
-      <body className="min-h-screen antialiased" suppressHydrationWarning>
+    <html lang="en" className={inter.variable} suppressHydrationWarning>
+      <body className="min-h-screen font-sans antialiased" suppressHydrationWarning>
         {children}
       </body>
     </html>

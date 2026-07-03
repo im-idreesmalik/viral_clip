@@ -16,8 +16,16 @@ export interface SessionPayload {
   email: string;
 }
 
+const DEV_SECRET = "dev-insecure-secret-change-me";
+
 function secretKey(): Uint8Array {
-  return new TextEncoder().encode(process.env.AUTH_SECRET || "dev-insecure-secret-change-me");
+  const secret = process.env.AUTH_SECRET;
+  // Fail closed in production: a missing/default secret would let anyone forge
+  // a session JWT for any user. Only the dev fallback is allowed outside prod.
+  if ((!secret || secret === DEV_SECRET) && process.env.NODE_ENV === "production") {
+    throw new Error("AUTH_SECRET must be set to a strong random value in production.");
+  }
+  return new TextEncoder().encode(secret || DEV_SECRET);
 }
 
 function sessionMaxAgeSeconds(): number {

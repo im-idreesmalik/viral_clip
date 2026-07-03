@@ -9,7 +9,12 @@ export const GET = handler(async () => {
     where: { userId: session.sub },
     orderBy: { createdAt: "desc" },
     take: 100,
-    include: { clip: { include: { video: true } }, socialAccount: true },
+    // Omit the (potentially large) transcript JSON — this endpoint is polled and
+    // serializePublication only needs the video's title/hashtags/clipMode.
+    include: {
+      clip: { include: { video: { omit: { transcript: true } } } },
+      socialAccount: true,
+    },
   });
   return ok(publications.map(serializePublication));
 });

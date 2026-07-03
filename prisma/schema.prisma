@@ -168,6 +168,8 @@ model Clip {
 
   @@index([videoId, status])
   @@index([startSec])
+  // For the auto-publish scheduler's "next eligible approved clip" query.
+  @@index([status, createdAt])
 }
 
 model SocialAccount {

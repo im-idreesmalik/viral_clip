@@ -12,6 +12,7 @@ import { env } from "@/lib/env";
 import { createLogger } from "@/lib/logger";
 import { decrypt, decryptMaybe, encrypt, encryptMaybe } from "@/lib/crypto";
 import { resolveKey } from "@/lib/storage";
+import { signMediaKey } from "@/lib/media-url";
 import { enqueuePublish } from "@/lib/queue";
 import { composeTitle, composeDescription } from "@/lib/caption";
 import { getProvider, PublishError } from "@/services/social";
@@ -23,7 +24,9 @@ const log = createLogger("publisher");
  *  Media is served at the `/api/media/<key>` route, so the path must include it. */
 function absoluteMediaUrl(key: string): string {
   const base = (env.mediaPublicBase || env.appUrl).replace(/\/$/, "");
-  return `${base}/api/media/${key}`;
+  // Signed so the platform's server-side fetch (no session cookie) is allowed
+  // by the now-access-controlled media route.
+  return `${base}/api/media/${key}?${signMediaKey(key)}`;
 }
 
 async function recordLog(

@@ -1,13 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { memo, useState } from "react";
 import { api, formatDuration, PLATFORM_META } from "@/lib/client";
 import type { ClipDTO, ClipMode } from "@/lib/types";
 import { ClipStatusBadge, ScoreBadge } from "@/components/dashboard/badges";
 import { PublishDialog } from "@/components/dashboard/PublishDialog";
 import { useToast } from "@/components/ui/Toast";
 
-export function ClipCard({
+function ClipCardImpl({
   clip,
   onChange,
   clipMode,
@@ -226,3 +226,20 @@ export function ClipCard({
     </div>
   );
 }
+
+// Skip re-render on polls where nothing visible on the card changed — otherwise
+// a 60-clip grid re-renders every ~4s while a video processes.
+export const ClipCard = memo(ClipCardImpl, (a, b) => {
+  const x = a.clip;
+  const y = b.clip;
+  return (
+    a.onChange === b.onChange &&
+    a.clipMode === b.clipMode &&
+    x.id === y.id &&
+    x.updatedAt === y.updatedAt &&
+    x.status === y.status &&
+    x.videoUrl === y.videoUrl &&
+    x.thumbnailUrl === y.thumbnailUrl &&
+    x.publishedPlatforms.join(",") === y.publishedPlatforms.join(",")
+  );
+});

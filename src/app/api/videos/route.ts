@@ -12,6 +12,7 @@ export const GET = handler(async () => {
   const videos = await prisma.video.findMany({
     where: { userId: session.sub },
     orderBy: { createdAt: "desc" },
+    omit: { transcript: true }, // large JSON, never sent to the client
     include: { _count: { select: { clips: true } } },
   });
   return ok(

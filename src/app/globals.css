@@ -12,11 +12,26 @@ body {
   color: #e8e8f0;
 }
 
-/* Ambient brand glow at the top of every page for depth. */
+/* Ambient, layered brand glow for depth (fixed so it doesn't scroll). */
 body {
-  background-image: radial-gradient(70% 50% at 50% -10%, rgba(124, 92, 255, 0.12) 0%, rgba(124, 92, 255, 0) 70%);
+  background-image:
+    radial-gradient(60% 40% at 15% -5%, rgba(124, 92, 255, 0.1) 0%, rgba(124, 92, 255, 0) 60%),
+    radial-gradient(50% 40% at 100% 0%, rgba(34, 211, 238, 0.06) 0%, rgba(34, 211, 238, 0) 55%),
+    radial-gradient(70% 50% at 50% -10%, rgba(124, 92, 255, 0.12) 0%, rgba(124, 92, 255, 0) 70%);
   background-repeat: no-repeat;
   background-attachment: fixed;
+}
+
+/* Respect users who prefer less motion. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  ::before,
+  ::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }
 
 ::selection {
@@ -60,42 +75,59 @@ body {
 
 @layer components {
   .btn {
-    @apply inline-flex select-none items-center justify-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-all duration-150 active:scale-[0.98] disabled:pointer-events-none disabled:opacity-50;
+    @apply inline-flex select-none items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold tracking-tight transition-all duration-150 ease-out active:scale-[0.97] disabled:pointer-events-none disabled:opacity-50;
   }
   .btn-primary {
-    @apply btn bg-brand-gradient text-white shadow-glow-sm hover:brightness-110 hover:shadow-glow;
+    @apply btn bg-brand-gradient text-white shadow-glow-sm hover:-translate-y-px hover:shadow-glow hover:brightness-[1.07];
   }
   .btn-secondary {
-    @apply btn border border-ink-700 bg-ink-800 text-ink-100 hover:border-ink-600 hover:bg-ink-700;
+    @apply btn border border-ink-700 bg-ink-800/70 text-ink-100 hover:border-ink-600 hover:bg-ink-700;
   }
   .btn-ghost {
-    @apply btn text-ink-200 hover:bg-ink-800 hover:text-ink-100;
+    @apply btn text-ink-200 hover:bg-ink-800 hover:text-ink-50;
   }
   .btn-danger {
     @apply btn border border-red-900/60 bg-red-950/40 text-red-300 hover:border-red-800 hover:bg-red-900/40;
   }
 
   .card {
-    @apply rounded-xl border border-ink-700/80 bg-ink-900/80 shadow-card backdrop-blur-sm;
+    @apply rounded-2xl border border-ink-700/70 bg-ink-900/70 shadow-card backdrop-blur-md;
   }
   /* Opt-in lift on hover for clickable cards. */
   .card-hover {
-    @apply transition-all duration-200 hover:-translate-y-0.5 hover:border-ink-600 hover:shadow-card-hover;
+    @apply transition-all duration-200 ease-out hover:-translate-y-0.5 hover:border-brand-500/40 hover:shadow-card-hover;
   }
 
   .input {
-    @apply w-full rounded-lg border border-ink-700 bg-ink-950/80 px-3 py-2 text-sm text-ink-100 outline-none transition-colors placeholder:text-ink-500 hover:border-ink-600 focus:border-brand-500 focus:ring-2 focus:ring-brand-500/30;
+    @apply w-full rounded-xl border border-ink-700 bg-ink-950/60 px-3.5 py-2.5 text-sm text-ink-100 outline-none transition-all duration-150 placeholder:text-ink-500 hover:border-ink-600 focus:border-brand-500 focus:ring-4 focus:ring-brand-500/15;
   }
   .label {
-    @apply mb-1 block text-xs font-medium uppercase tracking-wide text-ink-300;
+    @apply mb-1.5 block text-xs font-medium uppercase tracking-wide text-ink-300;
   }
+
+  /* Pill badges — base + semantic tints. */
   .badge {
-    @apply inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium;
+    @apply inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-medium;
+  }
+  .badge-neutral {
+    @apply badge bg-ink-800 text-ink-300;
+  }
+  .badge-brand {
+    @apply badge bg-brand-500/15 text-brand-200 ring-1 ring-inset ring-brand-500/20;
+  }
+  .badge-success {
+    @apply badge bg-emerald-500/15 text-emerald-300 ring-1 ring-inset ring-emerald-500/20;
+  }
+  .badge-warn {
+    @apply badge bg-amber-500/15 text-amber-300 ring-1 ring-inset ring-amber-500/20;
+  }
+  .badge-danger {
+    @apply badge bg-red-500/15 text-red-300 ring-1 ring-inset ring-red-500/20;
   }
 
   /* Loading placeholder with a shimmer sweep. */
   .skeleton {
-    @apply relative overflow-hidden rounded-lg bg-ink-800;
+    @apply relative overflow-hidden rounded-xl bg-ink-800/70;
   }
   .skeleton::after {
     content: "";

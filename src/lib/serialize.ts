@@ -9,7 +9,11 @@ import type { Video, Clip, ClipMode, SocialAccount, Publication, AutoPublishConf
 import { publicUrl } from "./storage";
 import { composeTitle, composeDescription } from "./caption";
 
-export function serializeVideo(v: Video & { clips?: Clip[] }) {
+// The DTO never includes the (large) transcript, so serializers accept a Video
+// with or without it — letting callers omit it from the query for performance.
+type VideoLite = Omit<Video, "transcript">;
+
+export function serializeVideo(v: VideoLite & { clips?: Clip[] }) {
   return {
     id: v.id,
     title: v.title,
@@ -95,7 +99,7 @@ export function serializeSocialAccount(a: SocialAccount) {
 }
 
 export function serializePublication(
-  p: Publication & { clip?: (Clip & { video?: Video }) | null; socialAccount?: SocialAccount | null },
+  p: Publication & { clip?: (Clip & { video?: VideoLite }) | null; socialAccount?: SocialAccount | null },
 ) {
   return {
     id: p.id,

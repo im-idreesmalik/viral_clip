@@ -135,8 +135,17 @@ export async function processVideo(videoId: string): Promise<void> {
       );
     }
 
+    // If every clip failed to render, the video isn't "ready" — fail it so the
+    // dashboard shows an error and the user can retry, instead of an empty READY.
+    const readyCount = await prisma.clip.count({
+      where: { videoId, status: ClipStatus.READY },
+    });
+    if (readyCount === 0) {
+      throw new Error("All clips failed to render. Check the source file and try reprocessing.");
+    }
+
     await setStatus(videoId, VideoStatus.READY);
-    log.info("Video processing complete", { videoId, clips: createdClips.length });
+    log.info("Video processing complete", { videoId, clips: readyCount });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     log.error("Video processing failed", { videoId, message });

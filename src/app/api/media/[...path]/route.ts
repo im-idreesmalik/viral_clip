@@ -3,6 +3,8 @@ import { Readable } from "node:stream";
 import path from "node:path";
 import { type NextRequest } from "next/server";
 import { resolveKey, stat } from "@/lib/storage";
+import { getSession } from "@/lib/auth";
+import { verifyMediaSig } from "@/lib/media-url";
 
 export const runtime = "nodejs";
 
@@ -30,13 +32,26 @@ export async function GET(req: NextRequest, ctx: Ctx) {
   const { path: segments } = await ctx.params;
   const key = segments.join("/");
 
+  // Access control: allow a valid short-lived signature (used by IG/FB pull
+  // upload) OR an authenticated session (dashboard playback). Otherwise 404 —
+  // never expose another tenant's media by id. (404, not 401, to avoid leaking
+  // whether a key exists.)
+  const url = new URL(req.url);
+  const signed = verifyMediaSig(key, url.searchParams.get("exp"), url.searchParams.get("sig"));
+  if (!signed) {
+    const session = await getSession();
+    if (!session) return new Response("Not found", { status: 404 });
+  }
+
   let absPath: string;
   let size: number;
+  let mtimeMs = 0;
   try {
     absPath = resolveKey(key);
     const info = await stat(key);
     if (!info.isFile()) return new Response("Not found", { status: 404 });
     size = info.size;
+    mtimeMs = info.mtimeMs;
   } catch {
     return new Response("Not found", { status: 404 });
   }
@@ -44,6 +59,16 @@ export async function GET(req: NextRequest, ctx: Ctx) {
   const ext = path.extname(absPath).toLowerCase();
   const contentType = CONTENT_TYPES[ext] ?? "application/octet-stream";
   const range = req.headers.get("range");
+
+  // Rendered clips/thumbnails are content-addressed (immutable). Cache hard for
+  // signed URLs (CDN-friendly); keep session access private. Support 304.
+  const etag = `"${size.toString(16)}-${Math.round(mtimeMs).toString(16)}"`;
+  const cacheControl = signed
+    ? "public, max-age=31536000, immutable"
+    : "private, max-age=86400";
+  if (req.headers.get("if-none-match") === etag) {
+    return new Response(null, { status: 304, headers: { ETag: etag, "Cache-Control": cacheControl } });
+  }
 
   // Range request -> 206 Partial Content.
   if (range) {
@@ -65,7 +90,8 @@ export async function GET(req: NextRequest, ctx: Ctx) {
           "Content-Length": String(end - start + 1),
           "Content-Range": `bytes ${start}-${end}/${size}`,
           "Accept-Ranges": "bytes",
-          "Cache-Control": "private, max-age=3600",
+          "Cache-Control": cacheControl,
+          ETag: etag,
         },
       });
     }
@@ -78,7 +104,8 @@ export async function GET(req: NextRequest, ctx: Ctx) {
       "Content-Type": contentType,
       "Content-Length": String(size),
       "Accept-Ranges": "bytes",
-      "Cache-Control": "private, max-age=3600",
+      "Cache-Control": cacheControl,
+      ETag: etag,
     },
   });
 }

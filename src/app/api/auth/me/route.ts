@@ -18,8 +18,12 @@ const patchSchema = z.object({
 export const PATCH = handler(async (req) => {
   const session = await requireSession();
   const body = await parseBody(req, patchSchema);
-  // Normalize: strip leading @ and surrounding spaces; empty clears it.
-  const handle = body.handle === undefined ? undefined : body.handle.replace(/^@+/, "").trim();
+  // Normalize: strip a leading @, allow only safe handle chars (letters, digits,
+  // _ . -) so it's harmless when burned into the video via ffmpeg drawtext.
+  const handle =
+    body.handle === undefined
+      ? undefined
+      : body.handle.replace(/^@+/, "").replace(/[^\w.\-]/g, "").slice(0, 32).trim();
   const user = await prisma.user.update({
     where: { id: session.sub },
     data: { handle: handle === undefined ? undefined : handle || null },
