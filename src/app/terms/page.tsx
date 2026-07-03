@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { BrandMark } from "@/components/BrandMark";
 
 // NOTE: Replace CONTACT_EMAIL / COMPANY with your real details, and have these
 // terms reviewed by legal counsel before relying on them in production.
@@ -146,7 +147,9 @@ function LegalShell({
     <div className="min-h-screen bg-ink-950 text-ink-100">
       <header className="mx-auto flex max-w-3xl items-center justify-between px-6 py-5">
         <Link href="/" className="flex items-center gap-2">
-          <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-brand-500">✂️</span>
+          <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-brand-gradient text-white shadow-glow-sm">
+            <BrandMark className="h-[18px] w-[18px]" />
+          </span>
           <span className="font-semibold">ViralCut</span>
         </Link>
         <Link href="/" className="text-sm text-ink-100/70 hover:text-ink-100">← Home</Link>
