@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { ClipMode, FootageMode, VideoStatus } from "@prisma/client";
+import { ClipMode, FootageMode, VideoStatus, Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { handler, ok, requireSession, ApiError } from "@/lib/api";
 import { enqueueProcessVideo } from "@/lib/queue";
@@ -52,6 +52,9 @@ export const POST = handler(async (req, ctx: Ctx) => {
       burnCaptions: overrides?.burnCaptions ?? video.burnCaptions,
       footageMode: overrides?.footageMode ?? video.footageMode,
       language: overrides?.language ?? video.language,
+      // Drop the cached transcript so reprocessing re-transcribes with the
+      // current language (otherwise a language change would keep the old text).
+      transcript: Prisma.DbNull,
     },
   });
 

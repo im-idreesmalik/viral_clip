@@ -165,6 +165,8 @@ export interface RenderClipOptions {
   endSec: number;
   /** Path to a subtitle file (.ass or .srt) to burn in. Optional. */
   subtitlePath?: string;
+  /** Extra fonts dir for libass (non-Latin caption glyphs). */
+  subtitleFontsDir?: string;
   /** Text burned into the top band of the vertical frame (e.g. "Part 3"). */
   partLabel?: string;
   /** GENERIC footage mode: stock video paths whose visuals replace the
@@ -185,6 +187,7 @@ export interface RenderClipOptions {
  */
 function buildVerticalFilter(opts: {
   subtitlePath?: string;
+  subtitleFontsDir?: string;
   partLabel?: string;
   watermark?: string;
   inputLabel?: string;
@@ -204,7 +207,7 @@ function buildVerticalFilter(opts: {
   ];
   let lastLabel = "outv";
   if (opts.subtitlePath) {
-    chain.push(`[${lastLabel}]${subtitleFilterArg(opts.subtitlePath)}[subbed]`);
+    chain.push(`[${lastLabel}]${subtitleFilterArg(opts.subtitlePath, opts.subtitleFontsDir)}[subbed]`);
     lastLabel = "subbed";
   }
   if (opts.partLabel) {
@@ -253,17 +256,20 @@ function drawTextArg(
  * file is on another drive than cwd (no relative form), we fall back to an
  * absolute path with the colon backslash-escaped.
  */
-function subtitleFilterArg(subtitlePath: string): string {
-  let p = subtitlePath;
-  const rel = path.relative(process.cwd(), subtitlePath);
-  if (rel && !path.isAbsolute(rel)) {
-    p = rel; // same drive → clean relative path (no colon, no cwd spaces)
-  }
-  p = p.replace(/\\/g, "/").replace(/'/g, "\\'");
-  if (/^[A-Za-z]:\//.test(p)) {
-    p = p.replace(":", "\\:"); // cross-drive absolute fallback
-  }
-  return `subtitles='${p}'`;
+function subtitleFilterArg(subtitlePath: string, fontsDir?: string): string {
+  const clean = (raw: string) => {
+    let p = raw;
+    const rel = path.relative(process.cwd(), raw);
+    if (rel && !path.isAbsolute(rel)) p = rel; // same drive → clean relative path
+    p = p.replace(/\\/g, "/").replace(/'/g, "\\'");
+    if (/^[A-Za-z]:\//.test(p)) p = p.replace(":", "\\:"); // cross-drive absolute fallback
+    return p;
+  };
+  let arg = `subtitles='${clean(subtitlePath)}'`;
+  // Point libass at our extra fonts (Noto Arabic/Urdu/Devanagari) so non-Latin
+  // captions render with the right glyphs instead of boxes.
+  if (fontsDir) arg += `:fontsdir='${clean(fontsDir)}'`;
+  return arg;
 }
 
 // EBU R128 loudness normalization target (a good level for social platforms).
@@ -305,7 +311,7 @@ function applyEncoder(command: ReturnType<typeof ffmpeg>, encoder: string) {
 }
 
 export async function renderClip(opts: RenderClipOptions): Promise<void> {
-  const { input, output, startSec, endSec, subtitlePath, partLabel, genericInputs, watermark, vertical = true, onProgress } = opts;
+  const { input, output, startSec, endSec, subtitlePath, subtitleFontsDir, partLabel, genericInputs, watermark, vertical = true, onProgress } = opts;
   const duration = Math.max(0.1, endSec - startSec);
 
   // Detect audio up front so we only build the audio chain when there's a
@@ -346,9 +352,9 @@ export async function renderClip(opts: RenderClipOptions): Promise<void> {
           );
           const cat = generic.map((_, i) => `[g${i}]`).join("");
           const reel = `${norm.join(";")};${cat}concat=n=${generic.length}:v=1:a=0[gcat];[gcat]trim=0:${duration.toFixed(3)},setpts=PTS-STARTPTS[gv]`;
-          filter = `${reel};${buildVerticalFilter({ subtitlePath, partLabel: titleLabel, watermark: wmLabel, inputLabel: "gv" })}`;
+          filter = `${reel};${buildVerticalFilter({ subtitlePath, subtitleFontsDir, partLabel: titleLabel, watermark: wmLabel, inputLabel: "gv" })}`;
         } else {
-          filter = buildVerticalFilter({ subtitlePath, partLabel: titleLabel, watermark: wmLabel });
+          filter = buildVerticalFilter({ subtitlePath, subtitleFontsDir, partLabel: titleLabel, watermark: wmLabel });
         }
         // Audio always comes from the original (input 0), even in GENERIC mode.
         const maps = ["-map", "[v]"];
@@ -359,7 +365,7 @@ export async function renderClip(opts: RenderClipOptions): Promise<void> {
         command.complexFilter(filter);
         command.outputOptions(maps);
       } else {
-        if (subtitlePath) command.videoFilters(subtitleFilterArg(subtitlePath));
+        if (subtitlePath) command.videoFilters(subtitleFilterArg(subtitlePath, subtitleFontsDir));
         if (hasAudio) command.audioFilters(LOUDNORM);
       }
 

@@ -32,10 +32,18 @@ export interface CaptionResult {
  * Build captions for the window [startSec, endSec] of the source video.
  * Returns empty (but valid) files when no words fall in the window.
  */
+export interface CaptionOptions {
+  /** .ass font family (must be findable by libass). Default "Arial". */
+  fontFamily?: string;
+  /** Uppercase the burned text (Latin only). Default true. */
+  uppercase?: boolean;
+}
+
 export function buildCaptions(
   words: TranscriptWord[],
   startSec: number,
   endSec: number,
+  opts: CaptionOptions = {},
 ): CaptionResult {
   const windowWords = words
     .filter((w) => w.end > startSec && w.start < endSec)
@@ -49,7 +57,7 @@ export function buildCaptions(
   const cues = groupIntoCues(windowWords);
   const text = cues.map((c) => c.text).join(" ");
   return {
-    ass: buildAss(cues),
+    ass: buildAss(cues, opts.fontFamily ?? "Arial", opts.uppercase ?? true),
     srt: buildSrt(cues),
     text,
     cues,
@@ -97,7 +105,7 @@ function groupIntoCues(words: { start: number; end: number; word: string }[]): C
 
 // ---- ASS (Advanced SubStation Alpha) for burn-in --------------------------
 
-function buildAss(cues: Cue[]): string {
+function buildAss(cues: Cue[], fontFamily: string, uppercase: boolean): string {
   const header = `[Script Info]
 ScriptType: v4.00+
 PlayResX: ${VERTICAL_WIDTH}
@@ -107,13 +115,13 @@ ScaledBorderAndShadow: yes
 
 [V4+ Styles]
 Format: Name, Fontname, Fontsize, PrimaryColour, OutlineColour, BackColour, Bold, Italic, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
-Style: Default,Arial,72,&H00FFFFFF,&H00000000,&H64000000,-1,0,1,5,2,2,80,80,420,1
+Style: Default,${fontFamily},72,&H00FFFFFF,&H00000000,&H64000000,-1,0,1,5,2,2,80,80,420,1
 
 [Events]
 Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text`;
 
   const lines = cues.map((c) => {
-    const text = escapeAss(c.text.toUpperCase());
+    const text = escapeAss(uppercase ? c.text.toUpperCase() : c.text);
     return `Dialogue: 0,${assTime(c.start)},${assTime(c.end)},Default,,0,0,0,,${text}`;
   });
   return `${header}\n${lines.join("\n")}\n`;

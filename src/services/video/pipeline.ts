@@ -18,6 +18,7 @@ import { probe, renderClip, captureThumbnail, selectGenericFootage } from "./ffm
 import { downloadVideo } from "./download";
 import { transcribe, type Transcript } from "./transcription";
 import { buildCaptions } from "@/services/captions/subtitles";
+import { captionFont } from "@/services/captions/fonts";
 import { detectViralClips } from "@/services/ai/clipDetection";
 import { segmentVideo } from "@/services/ai/segmentation";
 import type { DetectedClip } from "@/services/ai/types";
@@ -220,10 +221,17 @@ export async function renderClipRecord(clipId: string): Promise<void> {
   // ffmpeg can reference it by a clean cwd-relative path on Windows.
   const assKey = `.captions/${clipId}.ass`;
 
+  // Choose a caption font that supports the video's language script (Arabic/
+  // Urdu/Devanagari), so non-Latin captions render instead of boxes.
+  const font = captionFont(clip.video.language);
+
   const transcript = clip.video.transcript as unknown as Transcript | null;
   // Only build/burn captions when the user enabled them for this video.
   if (clip.video.burnCaptions && transcript?.words?.length) {
-    const captions = buildCaptions(transcript.words, clip.startSec, clip.endSec);
+    const captions = buildCaptions(transcript.words, clip.startSec, clip.endSec, {
+      fontFamily: font.family,
+      uppercase: font.uppercase,
+    });
     if (captions.cues.length > 0) {
       await writeFile(assKey, Buffer.from(captions.ass, "utf8"));
       await writeFile(captionsKey, Buffer.from(captions.srt, "utf8"));
@@ -255,6 +263,7 @@ export async function renderClipRecord(clipId: string): Promise<void> {
       startSec: clip.startSec,
       endSec: clip.endSec,
       subtitlePath,
+      subtitleFontsDir: subtitlePath ? env.fontsDir : undefined,
       partLabel:
         clip.video.clipMode === "FULL" && clip.order != null ? `Part ${clip.order}` : undefined,
       genericInputs,

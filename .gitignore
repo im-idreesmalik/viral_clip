@@ -16,7 +16,9 @@ next-env.d.ts
 /tmp
 
 # local binary tooling (whisper.cpp CUDA build + models — large, machine-specific)
-/tools
+/tools/*
+# …but keep the small, redistributable caption fonts (needed for non-Latin subs)
+!/tools/fonts
 
 # env
 .env

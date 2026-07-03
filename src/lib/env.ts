@@ -57,6 +57,9 @@ export const env = {
   // Font used to burn the "Part N" title into clips (drawtext). Defaults to
   // Windows Arial Bold; override with FONT_FILE.
   fontFile: process.env.FONT_FILE || "C:/Windows/Fonts/arialbd.ttf",
+  // Directory of extra caption fonts (Noto Arabic/Urdu/Devanagari) that libass
+  // loads so non-Latin subtitles render instead of showing boxes.
+  fontsDir: process.env.FONTS_DIR || path.resolve("tools/fonts"),
 
   // AI clip detection provider: "ollama" (local, free) or "anthropic" (cloud).
   aiProvider: (process.env.AI_PROVIDER || "ollama") as "ollama" | "anthropic",
