@@ -134,16 +134,16 @@ body {
     @apply badge bg-ink-800 text-ink-300;
   }
   .badge-brand {
-    @apply badge bg-brand-500/12 text-brand-700 ring-1 ring-inset ring-brand-500/20;
+    @apply badge bg-brand-500/10 text-brand-700 ring-1 ring-inset ring-brand-500/20;
   }
   .badge-success {
-    @apply badge bg-emerald-500/12 text-emerald-700 ring-1 ring-inset ring-emerald-500/20;
+    @apply badge bg-emerald-500/10 text-emerald-700 ring-1 ring-inset ring-emerald-500/20;
   }
   .badge-warn {
     @apply badge bg-amber-500/15 text-amber-700 ring-1 ring-inset ring-amber-500/25;
   }
   .badge-danger {
-    @apply badge bg-red-500/12 text-red-700 ring-1 ring-inset ring-red-500/20;
+    @apply badge bg-red-500/10 text-red-700 ring-1 ring-inset ring-red-500/20;
   }
 
   /* Loading placeholder with a shimmer sweep. */

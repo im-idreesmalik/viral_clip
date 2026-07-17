@@ -78,7 +78,7 @@ export function Sidebar({
             className={clsx(
               "group flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-all",
               active
-                ? "bg-brand-500/12 text-brand-700 shadow-[inset_0_0_0_1px_rgba(124,92,255,0.22)]"
+                ? "bg-brand-500/10 text-brand-700 shadow-[inset_0_0_0_1px_rgba(124,92,255,0.22)]"
                 : "text-ink-300 hover:bg-ink-800/70 hover:text-ink-100",
             )}
           >
