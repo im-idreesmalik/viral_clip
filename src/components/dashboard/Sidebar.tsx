@@ -22,6 +22,7 @@ function Icon({ name, className }: { name: string; className?: string }) {
 
 const NAV = [
   { href: "/dashboard", label: "Videos", icon: "video_library", exact: true },
+  { href: "/dashboard/stories", label: "AI Stories", icon: "auto_stories" },
   { href: "/dashboard/connections", label: "Connections", icon: "hub" },
   { href: "/dashboard/publishing", label: "Publishing", icon: "send" },
   { href: "/dashboard/generic", label: "Generic", icon: "movie" },

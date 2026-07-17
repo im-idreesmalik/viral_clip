@@ -325,10 +325,13 @@ export async function renderClip(opts: RenderClipOptions): Promise<void> {
   const { input, output, startSec, endSec, subtitlePath, subtitleFontsDir, partLabel, topLabel, genericInputs, watermark, vertical = true, onProgress } = opts;
   const duration = Math.max(0.1, endSec - startSec);
 
-  // Detect audio up front so we only build the audio chain when there's a
-  // stream to normalize (and keep the clip's voice clear + consistently loud).
+  // Detect streams up front: we only build the audio chain when there's a
+  // stream to normalize, and we only use the source's own video when it has one
+  // (an AI Story source is audio-only — its visuals come from generic footage
+  // or, failing that, a solid background).
   const meta = await probe(input).catch(() => null);
   const hasAudio = meta?.hasAudio ?? true;
+  const hasVideo = (meta?.width ?? 0) > 0 && (meta?.height ?? 0) > 0;
 
   // Only burn drawtext overlays if the font is available — otherwise skip them
   // rather than fail the whole render.
@@ -349,21 +352,34 @@ export async function renderClip(opts: RenderClipOptions): Promise<void> {
 
       // GENERIC footage: extra inputs whose visuals replace the original's.
       const generic = genericInputs && genericInputs.length > 0 ? genericInputs : null;
-      if (generic) for (const g of generic) command.input(g);
+      // When the source has no video of its own (an AI Story voice-over) and no
+      // generic footage was supplied, synthesize a solid background so there's
+      // something to show behind the captions instead of failing the render.
+      const syntheticBg = vertical && !generic && !hasVideo;
+      const overlayInputs = generic ?? (syntheticBg ? ["__bg__"] : null);
+
+      if (generic) {
+        for (const g of generic) command.input(g);
+      } else if (syntheticBg) {
+        command
+          .input(`color=c=0x0b0b12:s=${VERTICAL_WIDTH}x${VERTICAL_HEIGHT}:d=${duration.toFixed(3)}:r=30`)
+          .inputOptions(["-f", "lavfi"]);
+      }
 
       if (vertical) {
         let filter: string;
-        if (generic) {
-          // Normalize each generic clip to the vertical frame, concat them into
-          // one reel, trim to the clip length, then feed into the vertical
-          // (blurred-fill) filter. Generic footage is stored 9:16 already, so
-          // this is a straight fit; any stray non-9:16 file is cover-cropped.
-          const norm = generic.map(
+        if (overlayInputs) {
+          // Normalize each overlay clip (stock footage or the synthetic bg) to
+          // the vertical frame, concat into one reel, trim to the clip length,
+          // then feed into the vertical (blurred-fill) filter. Generic footage
+          // is stored 9:16 already, so this is a straight fit; any stray
+          // non-9:16 file is cover-cropped.
+          const norm = overlayInputs.map(
             (_, i) =>
               `[${i + 1}:v]scale=${VERTICAL_WIDTH}:${VERTICAL_HEIGHT}:force_original_aspect_ratio=increase,crop=${VERTICAL_WIDTH}:${VERTICAL_HEIGHT},setsar=1,fps=30,format=yuv420p[g${i}]`,
           );
-          const cat = generic.map((_, i) => `[g${i}]`).join("");
-          const reel = `${norm.join(";")};${cat}concat=n=${generic.length}:v=1:a=0[gcat];[gcat]trim=0:${duration.toFixed(3)},setpts=PTS-STARTPTS[gv]`;
+          const cat = overlayInputs.map((_, i) => `[g${i}]`).join("");
+          const reel = `${norm.join(";")};${cat}concat=n=${overlayInputs.length}:v=1:a=0[gcat];[gcat]trim=0:${duration.toFixed(3)},setpts=PTS-STARTPTS[gv]`;
           filter = `${reel};${buildVerticalFilter({ subtitlePath, subtitleFontsDir, partLabel: titleLabel, topLabel: topTitle, watermark: wmLabel, inputLabel: "gv" })}`;
         } else {
           filter = buildVerticalFilter({ subtitlePath, subtitleFontsDir, partLabel: titleLabel, topLabel: topTitle, watermark: wmLabel });

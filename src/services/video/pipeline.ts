@@ -255,15 +255,16 @@ export async function renderClipRecord(clipId: string): Promise<void> {
   }
 
   try {
-    // GENERIC footage mode: replace the visuals with random stock clips.
+    // GENERIC footage mode: replace the visuals with random stock clips. Used
+    // for Full-video B-roll and for AI Story videos (whose source is audio-only,
+    // so their visuals MUST come from stock footage or a synthetic background).
     let genericInputs: string[] | undefined;
-    // Generic (B-roll) footage only applies to Full-video mode.
-    if (clip.video.footageMode === "GENERIC" && clip.video.clipMode === "FULL") {
+    if (clip.video.footageMode === "GENERIC") {
       genericInputs = await selectGenericFootage(clip.endSec - clip.startSec);
       if (genericInputs.length === 0) {
-        log.warn("GENERIC footage mode but no files in storage/generic; using original footage.", {
-          clipId,
-        });
+        // No stock footage: the renderer falls back to the source's own video,
+        // or (for an audio-only story source) a solid background.
+        log.warn("GENERIC footage mode but no files in storage/generic.", { clipId });
         genericInputs = undefined;
       }
     }

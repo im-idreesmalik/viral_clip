@@ -18,6 +18,7 @@ function bullConnection(): ConnectionOptions {
 export const QUEUE_NAMES = {
   videoProcessing: "video-processing",
   publishing: "publishing",
+  stories: "stories",
 } as const;
 
 // ---- Job payload types -----------------------------------------------------
@@ -40,11 +41,16 @@ export interface PublishJob {
   publicationId: string;
 }
 
+export type StoryJob =
+  | { kind: "generate-story"; data: { storyId: string; durationMin: number } }
+  | { kind: "story-audio"; data: { storyId: string } };
+
 // ---- Queue singletons ------------------------------------------------------
 
 const globalForQueues = globalThis as unknown as {
   videoQueue?: Queue<VideoJob>;
   publishQueue?: Queue<PublishJob>;
+  storyQueue?: Queue<StoryJob>;
 };
 
 const defaultJobOptions: JobsOptions = {
@@ -89,6 +95,25 @@ export async function enqueueRegenerateClip(clipId: string, variation = false) {
     kind: "regenerate-clip",
     data: { clipId, variation },
   });
+}
+
+export function getStoryQueue(): Queue<StoryJob> {
+  const existing = globalForQueues.storyQueue;
+  if (existing) return existing;
+  const queue = new Queue<StoryJob>(QUEUE_NAMES.stories, {
+    connection: bullConnection(),
+    defaultJobOptions,
+  }) as unknown as Queue<StoryJob>;
+  globalForQueues.storyQueue = queue;
+  return queue;
+}
+
+export async function enqueueGenerateStory(storyId: string, durationMin: number) {
+  return getStoryQueue().add("generate-story", { kind: "generate-story", data: { storyId, durationMin } });
+}
+
+export async function enqueueStoryAudio(storyId: string) {
+  return getStoryQueue().add("story-audio", { kind: "story-audio", data: { storyId } });
 }
 
 export async function enqueuePublish(publicationId: string, delayMs?: number) {

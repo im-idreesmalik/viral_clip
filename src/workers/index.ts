@@ -15,6 +15,7 @@ import { ensureStorageRoot } from "@/lib/storage";
 import { createLogger } from "@/lib/logger";
 import { startVideoWorker } from "./videoProcessor";
 import { startPublishWorker } from "./publishWorker";
+import { startStoryWorker } from "./storyProcessor";
 import { runScheduler } from "./scheduler";
 
 const log = createLogger("worker");
@@ -109,9 +110,10 @@ async function main() {
 
   const videoWorker = startVideoWorker();
   const publishWorker = startPublishWorker();
+  const storyWorker = startStoryWorker();
 
   log.info("Workers started", {
-    queues: ["video-processing", "publishing"],
+    queues: ["video-processing", "publishing", "stories"],
   });
 
   // Auto-publish scheduler loop + stuck-job reaper, on the same tick.
@@ -132,7 +134,7 @@ async function main() {
   const shutdown = async (signal: string) => {
     log.info(`Received ${signal}, shutting down...`);
     clearInterval(schedulerTimer);
-    await Promise.allSettled([videoWorker.close(), publishWorker.close()]);
+    await Promise.allSettled([videoWorker.close(), publishWorker.close(), storyWorker.close()]);
     process.exit(0);
   };
   process.on("SIGINT", () => void shutdown("SIGINT"));

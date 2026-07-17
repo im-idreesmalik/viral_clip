@@ -112,6 +112,9 @@ export const env = {
 
   videoWorkerConcurrency: int(process.env.VIDEO_WORKER_CONCURRENCY, 1),
   publishWorkerConcurrency: int(process.env.PUBLISH_WORKER_CONCURRENCY, 2),
+  // AI Story generation/voice-over jobs. Kept low: TTS holds a model in memory
+  // and is CPU-bound, so 1 avoids memory pressure and GPU/CPU contention.
+  storyWorkerConcurrency: int(process.env.STORY_WORKER_CONCURRENCY, 1),
   // Auto-retry a failed publication in a sequential batch after this long if
   // nobody clicked Retry, so one failure can't stall the rest of the queue.
   publishAutoRetryAfterMs: int(process.env.PUBLISH_AUTO_RETRY_AFTER_MS, 5 * 60 * 1000),
@@ -140,6 +143,9 @@ export const env = {
   // Max time to wait on the AI clip-detection call (Ollama) before aborting →
   // falls back to plain segmentation instead of hanging the job.
   aiTimeoutMs: int(process.env.AI_TIMEOUT_MS, 5 * 60 * 1000),
+  // Long-form AI story generation runs much longer than clip detection
+  // (especially on a local model), so it gets its own generous timeout.
+  storyGenTimeoutMs: int(process.env.STORY_GEN_TIMEOUT_MS, 15 * 60 * 1000),
 
   social: {
     youtube: {

@@ -5,7 +5,7 @@
  * storage keys into public media URLs. Sensitive fields (token ciphertext)
  * are never included.
  */
-import type { Video, Clip, ClipMode, SocialAccount, Publication, AutoPublishConfig } from "@prisma/client";
+import type { Video, Clip, ClipMode, SocialAccount, Publication, AutoPublishConfig, Story, User } from "@prisma/client";
 import { publicUrl } from "./storage";
 import { composeTitle, composeDescription } from "./caption";
 
@@ -131,6 +131,39 @@ export function serializePublication(
         )
       : undefined,
     account: p.socialAccount ? serializeSocialAccount(p.socialAccount) : undefined,
+  };
+}
+
+// Story DTO. `includeAdmin` adds fields only the Super Admin should see
+// (the raw TTS transliteration, claimant identity, error details).
+export function serializeStory(
+  s: Story & { claimedBy?: Pick<User, "id" | "name" | "email"> | null },
+  opts: { includeAdmin?: boolean } = {},
+) {
+  const base = {
+    id: s.id,
+    title: s.title,
+    language: s.language,
+    source: s.source,
+    status: s.status,
+    text: s.text,
+    audioUrl: publicUrl(s.audioKey),
+    durationSec: s.durationSec,
+    createdAt: s.createdAt.toISOString(),
+    updatedAt: s.updatedAt.toISOString(),
+  };
+  if (!opts.includeAdmin) return base;
+  return {
+    ...base,
+    topic: s.topic,
+    ttsText: s.ttsText,
+    voice: s.voice,
+    claimedById: s.claimedById,
+    claimedByName: s.claimedBy?.name ?? null,
+    claimedByEmail: s.claimedBy?.email ?? null,
+    claimedAt: s.claimedAt?.toISOString() ?? null,
+    generatedVideoId: s.generatedVideoId,
+    errorMessage: s.errorMessage,
   };
 }
 
