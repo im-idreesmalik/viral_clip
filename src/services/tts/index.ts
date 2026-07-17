@@ -1,73 +1,59 @@
 /**
- * Local, free text-to-speech for AI Stories — two engines by language:
+ * Local, free text-to-speech for AI Stories — powered end-to-end by Kokoro-82M
+ * (the best free local TTS), with soft, natural FEMALE voices:
  *
- *   English  -> Kokoro-82M (kokoro-js) with a soft, natural FEMALE voice
- *               (af_heart by default; configurable via STORY_VOICE_EN).
- *   Urdu/Hindi -> Meta MMS-TTS Hindi (mms-tts-hin) via @huggingface/transformers,
- *               fed a Devanagari transliteration so it narrates natural
- *               Hindustani. (Kokoro is English-only, so Urdu uses the best
- *               available local voice.)
+ *   English    -> kokoro-js handles phonemization internally (af_heart default).
+ *   Urdu/Hindi -> kokoro-js is English-only, so we phonemize the Devanagari with
+ *                 espeak-ng (-v hi), tokenize with Kokoro's own tokenizer, and
+ *                 drive the model via generate_from_ids with a Hindi female
+ *                 voice (hf_alpha). Hindi = spoken Urdu/Hindustani.
  *
- * Both run on CPU (stable), and their pipelines are cached so the model load
- * happens once. Long text is chunked, synthesized per chunk, concatenated with
- * a short gap, and encoded to a compact MP3.
+ * One Kokoro model serves both languages. Runs on CPU (stable, fast). Long text
+ * is chunked, synthesized per chunk, concatenated with a short gap, and encoded
+ * to a compact MP3.
  */
 import os from "node:os";
 import path from "node:path";
 import fsp from "node:fs/promises";
+import fs from "node:fs";
+import { execFile } from "node:child_process";
+import { promisify } from "node:util";
 import ffmpeg from "fluent-ffmpeg";
 import ffmpegStatic from "ffmpeg-static";
 import { env } from "@/lib/env";
 import { createLogger } from "@/lib/logger";
 
+const execFileAsync = promisify(execFile);
 const log = createLogger("tts");
 
 if (env.ffmpegPath || ffmpegStatic) ffmpeg.setFfmpegPath(env.ffmpegPath || (ffmpegStatic as string));
 
-// VITS handles a sentence or two well; keep chunks short so nothing is dropped.
+// Kokoro handles a sentence or two well; keep chunks short so nothing is dropped.
 const MAX_CHARS_PER_CHUNK = 240;
 // Silence inserted between chunks so sentences don't run together (seconds).
 const GAP_SECONDS = 0.28;
-
 const KOKORO_MODEL = "onnx-community/Kokoro-82M-v1.0-ONNX";
-const MMS_HINDI_MODEL = "Xenova/mms-tts-hin";
 
-/** Urdu + Hindi use the MMS Hindi voice; everything else uses Kokoro (English). */
+/** Urdu + Hindi use the Kokoro Hindi voice; everything else uses English. */
 function isIndic(language: string): boolean {
   const l = (language || "en").toLowerCase();
   return l === "ur" || l === "hi" || l.startsWith("hi-") || l === "ur-hi";
 }
 
-// ---- Model caches ---------------------------------------------------------
+// ---- Kokoro model (cached) ------------------------------------------------
 
-let kokoroPromise: Promise<{ generate: (t: string, o: { voice: string }) => Promise<{ audio: Float32Array; sampling_rate: number }> }> | null = null;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+let kokoroPromise: Promise<any> | null = null;
 async function getKokoro() {
   if (!kokoroPromise) {
     kokoroPromise = (async () => {
       const { KokoroTTS } = await import("kokoro-js");
       log.info("Loading Kokoro TTS (first use downloads it)", { model: KOKORO_MODEL });
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      return (await KokoroTTS.from_pretrained(KOKORO_MODEL, { dtype: "q8", device: "cpu" } as any)) as any;
+      return await KokoroTTS.from_pretrained(KOKORO_MODEL, { dtype: "q8", device: "cpu" } as any);
     })();
   }
   return kokoroPromise;
-}
-
-const mmsPipelines = new Map<string, Promise<(text: string) => Promise<{ audio: Float32Array; sampling_rate: number }>>>();
-async function getMms(model: string) {
-  if (!mmsPipelines.has(model)) {
-    mmsPipelines.set(
-      model,
-      (async () => {
-        const { pipeline } = await import("@huggingface/transformers");
-        log.info("Loading MMS TTS model (first use downloads it)", { model });
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const p = (await pipeline("text-to-speech", model, { device: "cpu" } as any)) as any;
-        return (text: string) => p(text);
-      })(),
-    );
-  }
-  return mmsPipelines.get(model)!;
 }
 
 // ---- Chunking -------------------------------------------------------------
@@ -108,6 +94,29 @@ export function chunkForTts(text: string): string[] {
   return chunks;
 }
 
+// ---- espeak-ng phonemization (for the Hindi voice) ------------------------
+
+let espeakCounter = 0;
+/** Phonemize text to IPA with espeak-ng. Text is passed via a UTF-8 file so
+ *  non-Latin scripts survive (Windows mangles native-exe UTF-8 args). */
+async function espeakIpa(text: string, voice: string): Promise<string> {
+  if (!fs.existsSync(env.espeakPath)) {
+    throw new Error(
+      `espeak-ng not found at "${env.espeakPath}". Install it (winget install eSpeak-NG.eSpeak-NG) or set ESPEAK_PATH.`,
+    );
+  }
+  const f = path.join(os.tmpdir(), `vc-esp-${process.pid}-${espeakCounter++}.txt`);
+  await fsp.writeFile(f, text, "utf8");
+  try {
+    const { stdout } = await execFileAsync(env.espeakPath, ["-q", "--ipa", "-v", voice, "-f", f], {
+      maxBuffer: 8 * 1024 * 1024,
+    });
+    return stdout.replace(/\s+/g, " ").trim();
+  } finally {
+    await fsp.rm(f, { force: true }).catch(() => undefined);
+  }
+}
+
 // ---- Synthesis ------------------------------------------------------------
 
 export interface SynthesizeResult {
@@ -117,7 +126,7 @@ export interface SynthesizeResult {
 /**
  * Synthesize a full story to an MP3 at `outMp3Path`.
  *   - `text`: spoken content (English text, or Devanagari for Urdu/Hindustani).
- *   - `language`: "en" | "ur" (selects the voice engine).
+ *   - `language`: "en" | "ur" (selects the voice + phonemization path).
  */
 export async function synthesizeToMp3(
   text: string,
@@ -127,10 +136,30 @@ export async function synthesizeToMp3(
   const chunks = chunkForTts(text);
   if (chunks.length === 0) throw new Error("Nothing to synthesize (empty text).");
 
-  const { merged, sampleRate } = isIndic(language)
-    ? await synthWithMms(chunks)
-    : await synthWithKokoro(chunks, env.storyVoiceEn);
+  const tts = await getKokoro();
+  const indic = isIndic(language);
+  const voice = indic ? env.storyVoiceUr : env.storyVoiceEn;
+  let sampleRate = 24000;
+  const parts: Float32Array[] = [];
 
+  for (let i = 0; i < chunks.length; i++) {
+    let audio: { audio: Float32Array; sampling_rate: number };
+    if (indic) {
+      // espeak Hindi phonemes -> Kokoro tokenizer -> model (bypasses kokoro-js's
+      // English-only phonemizer + voice-list validation).
+      const ph = await espeakIpa(chunks[i], "hi");
+      if (!ph) continue;
+      const { input_ids } = tts.tokenizer(ph, { truncation: true });
+      audio = await tts.generate_from_ids(input_ids, { voice });
+    } else {
+      audio = await tts.generate(chunks[i], { voice });
+    }
+    sampleRate = audio.sampling_rate;
+    parts.push(audio.audio, new Float32Array(Math.round(sampleRate * GAP_SECONDS)));
+    if ((i + 1) % 10 === 0) log.info("TTS progress", { done: i + 1, total: chunks.length });
+  }
+
+  const merged = concat(parts);
   const tmpWav = path.join(os.tmpdir(), `vc-tts-${process.pid}-${chunks.length}.wav`);
   await fsp.writeFile(tmpWav, wavFromFloat32(merged, sampleRate));
   try {
@@ -140,38 +169,8 @@ export async function synthesizeToMp3(
   }
 
   const durationSec = merged.length / sampleRate;
-  log.info("Synthesized voice-over", {
-    engine: isIndic(language) ? "mms-hin" : `kokoro:${env.storyVoiceEn}`,
-    chunks: chunks.length,
-    durationSec: Math.round(durationSec),
-  });
+  log.info("Synthesized voice-over", { engine: `kokoro:${voice}`, chunks: chunks.length, durationSec: Math.round(durationSec) });
   return { durationSec };
-}
-
-async function synthWithKokoro(chunks: string[], voice: string): Promise<{ merged: Float32Array; sampleRate: number }> {
-  const tts = await getKokoro();
-  let sampleRate = 24000;
-  const parts: Float32Array[] = [];
-  for (let i = 0; i < chunks.length; i++) {
-    const out = await tts.generate(chunks[i], { voice });
-    sampleRate = out.sampling_rate;
-    parts.push(out.audio, new Float32Array(Math.round(sampleRate * GAP_SECONDS)));
-    if ((i + 1) % 10 === 0) log.info("TTS progress (kokoro)", { done: i + 1, total: chunks.length });
-  }
-  return { merged: concat(parts), sampleRate };
-}
-
-async function synthWithMms(chunks: string[]): Promise<{ merged: Float32Array; sampleRate: number }> {
-  const synth = await getMms(MMS_HINDI_MODEL);
-  let sampleRate = 16000;
-  const parts: Float32Array[] = [];
-  for (let i = 0; i < chunks.length; i++) {
-    const out = await synth(chunks[i]);
-    sampleRate = out.sampling_rate;
-    parts.push(out.audio, new Float32Array(Math.round(sampleRate * GAP_SECONDS)));
-    if ((i + 1) % 10 === 0) log.info("TTS progress (mms)", { done: i + 1, total: chunks.length });
-  }
-  return { merged: concat(parts), sampleRate };
 }
 
 function concat(parts: Float32Array[]): Float32Array {

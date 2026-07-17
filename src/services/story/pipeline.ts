@@ -8,6 +8,7 @@
 import { StoryStatus, StorySource } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { createLogger } from "@/lib/logger";
+import { env } from "@/lib/env";
 import { resolveKey, ensureDirFor, deleteKey } from "@/lib/storage";
 import { generateStory, transliterateUrduToDevanagari, type StoryLanguage } from "@/services/ai/storyGeneration";
 import { synthesizeToMp3 } from "@/services/tts";
@@ -95,7 +96,7 @@ async function synthesizeAndStore(storyId: string): Promise<void> {
 
   await prisma.story.update({
     where: { id: storyId },
-    data: { audioKey, durationSec, voice: story.language === "ur" ? "mms-hin" : "kokoro", status: StoryStatus.READY },
+    data: { audioKey, durationSec, voice: `kokoro:${story.language === "ur" ? env.storyVoiceUr : env.storyVoiceEn}`, status: StoryStatus.READY },
   });
   log.info("Story ready", { storyId, durationSec: Math.round(durationSec) });
 }

@@ -115,10 +115,14 @@ export const env = {
   // AI Story generation/voice-over jobs. Kept low: TTS holds a model in memory
   // and is CPU-bound, so 1 avoids memory pressure and GPU/CPU contention.
   storyWorkerConcurrency: int(process.env.STORY_WORKER_CONCURRENCY, 1),
-  // English story voice-over voice (Kokoro). Soft female options include
-  // af_heart (warm), af_bella (expressive), af_nicole (soft/breathy),
-  // af_sarah, bf_emma (British). Urdu/Hindi always uses the MMS Hindi voice.
+  // Story voice-over voices (Kokoro-82M — best free local TTS). English female
+  // options: af_heart (warm), af_bella (expressive), af_nicole (soft), bf_emma
+  // (British). Urdu/Hindi female options: hf_alpha, hf_beta.
   storyVoiceEn: process.env.STORY_VOICE_EN || "af_heart",
+  storyVoiceUr: process.env.STORY_VOICE_UR || "hf_alpha",
+  // espeak-ng gives Kokoro its Hindi/Urdu phonemes (the bundled JS phonemizer
+  // is English-only). Point ESPEAK_PATH at the binary if it's not the default.
+  espeakPath: process.env.ESPEAK_PATH || "C:/Program Files/eSpeak NG/espeak-ng.exe",
   // Auto-retry a failed publication in a sequential batch after this long if
   // nobody clicked Retry, so one failure can't stall the rest of the queue.
   publishAutoRetryAfterMs: int(process.env.PUBLISH_AUTO_RETRY_AFTER_MS, 5 * 60 * 1000),
