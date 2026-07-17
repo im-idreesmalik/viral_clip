@@ -95,7 +95,7 @@ async function synthesizeAndStore(storyId: string): Promise<void> {
 
   await prisma.story.update({
     where: { id: storyId },
-    data: { audioKey, durationSec, voice: story.language === "ur" ? "mms-hin" : "mms-eng", status: StoryStatus.READY },
+    data: { audioKey, durationSec, voice: story.language === "ur" ? "mms-hin" : "kokoro", status: StoryStatus.READY },
   });
   log.info("Story ready", { storyId, durationSec: Math.round(durationSec) });
 }

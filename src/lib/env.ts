@@ -115,6 +115,10 @@ export const env = {
   // AI Story generation/voice-over jobs. Kept low: TTS holds a model in memory
   // and is CPU-bound, so 1 avoids memory pressure and GPU/CPU contention.
   storyWorkerConcurrency: int(process.env.STORY_WORKER_CONCURRENCY, 1),
+  // English story voice-over voice (Kokoro). Soft female options include
+  // af_heart (warm), af_bella (expressive), af_nicole (soft/breathy),
+  // af_sarah, bf_emma (British). Urdu/Hindi always uses the MMS Hindi voice.
+  storyVoiceEn: process.env.STORY_VOICE_EN || "af_heart",
   // Auto-retry a failed publication in a sequential batch after this long if
   // nobody clicked Retry, so one failure can't stall the rest of the queue.
   publishAutoRetryAfterMs: int(process.env.PUBLISH_AUTO_RETRY_AFTER_MS, 5 * 60 * 1000),
