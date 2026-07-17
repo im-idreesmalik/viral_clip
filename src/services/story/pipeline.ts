@@ -10,7 +10,7 @@ import { prisma } from "@/lib/db";
 import { createLogger } from "@/lib/logger";
 import { env } from "@/lib/env";
 import { resolveKey, ensureDirFor, deleteKey } from "@/lib/storage";
-import { generateStory, transliterateUrduToDevanagari, type StoryLanguage } from "@/services/ai/storyGeneration";
+import { generateStory, type StoryLanguage } from "@/services/ai/storyGeneration";
 import { synthesizeToMp3 } from "@/services/tts";
 
 const log = createLogger("story:pipeline");
@@ -69,26 +69,11 @@ export async function generateStoryAudio(storyId: string): Promise<void> {
 async function synthesizeAndStore(storyId: string): Promise<void> {
   const story = await prisma.story.findUnique({ where: { id: storyId } });
   if (!story) throw new Error(`Story ${storyId} not found`);
-  let spoken = (story.ttsText || story.text || "").trim();
+  // Speak the story's own text directly. Urdu is narrated from its Arabic-script
+  // text via espeak's Urdu voice (see the TTS service), so no transliteration is
+  // needed — that also keeps Urdu sounding Urdu, not Hindi.
+  const spoken = (story.text || "").trim();
   if (!spoken) throw new Error("Story has no text to synthesize.");
-
-  // Urdu without a Devanagari form (pasted/uploaded): transliterate so the
-  // Hindi voice reads it as natural Hindustani instead of failing on Arabic
-  // script. Cache the result on the story for reuse.
-  if (story.language === "ur" && !story.ttsText?.trim() && story.text?.trim()) {
-    try {
-      const deva = (await transliterateUrduToDevanagari(story.text)).trim();
-      if (deva) {
-        spoken = deva;
-        await prisma.story.update({ where: { id: storyId }, data: { ttsText: deva } });
-      }
-    } catch (err) {
-      log.warn("Urdu->Devanagari transliteration failed; using raw text", {
-        storyId,
-        message: err instanceof Error ? err.message : String(err),
-      });
-    }
-  }
 
   const audioKey = `stories/${storyId}/audio.mp3`;
   await ensureDirFor(audioKey);

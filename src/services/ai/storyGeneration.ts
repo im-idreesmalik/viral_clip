@@ -105,8 +105,9 @@ async function generateStoryAnthropic(opts: GenerateStoryOptions, targetWords: n
     log.error("Failed to parse story output", { sample: raw.slice(0, 300) });
     throw new Error(`Story generation returned invalid output: ${err instanceof Error ? err.message : err}`);
   }
-  const ttsText = opts.language === "ur" && parsed.ttsText.trim() ? parsed.ttsText.trim() : null;
-  return { title: parsed.title.trim(), text: parsed.text.trim(), ttsText };
+  // Urdu is narrated directly from its Arabic-script text now, so ignore any
+  // Devanagari the model returned.
+  return { title: parsed.title.trim(), text: parsed.text.trim(), ttsText: null };
 }
 
 // ---- Ollama path (plain prose + continuation loop) ------------------------
@@ -149,9 +150,9 @@ async function generateStoryOllama(opts: GenerateStoryOptions, targetWords: numb
     log.info("Story continuation", { rounds, words });
   }
 
-  const ttsText =
-    opts.language === "ur" ? await transliterateUrduToDevanagari(body).catch(() => null) : null;
-  return { title, text: body.trim(), ttsText: ttsText?.trim() || null };
+  // Urdu is now narrated directly from its Arabic-script text (espeak -v ur),
+  // so no Devanagari transliteration is needed.
+  return { title, text: body.trim(), ttsText: null };
 }
 
 function parseTitleBody(raw: string): { title: string; body: string } {

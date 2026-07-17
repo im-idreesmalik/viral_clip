@@ -2,11 +2,13 @@
  * Local, free text-to-speech for AI Stories — powered end-to-end by Kokoro-82M
  * (the best free local TTS), with soft, natural FEMALE voices:
  *
- *   English    -> kokoro-js handles phonemization internally (af_heart default).
- *   Urdu/Hindi -> kokoro-js is English-only, so we phonemize the Devanagari with
- *                 espeak-ng (-v hi), tokenize with Kokoro's own tokenizer, and
- *                 drive the model via generate_from_ids with a Hindi female
- *                 voice (hf_alpha). Hindi = spoken Urdu/Hindustani.
+ *   English -> kokoro-js handles phonemization internally (af_heart default).
+ *   Urdu    -> phonemize the Urdu (Arabic-script) text with espeak-ng's Urdu
+ *              voice (-v ur) — this preserves Urdu-specific sounds (q/x/ɣ/z) and
+ *              vocabulary that a Hindi reading would flatten — then tokenize with
+ *              Kokoro's own tokenizer and synthesize via generate_from_ids with a
+ *              Hindi female voice (hf_alpha, the closest Hindustani voice Kokoro
+ *              ships). Hindi text (if ever used) goes through -v hi on Devanagari.
  *
  * One Kokoro model serves both languages. Runs on CPU (stable, fast). Long text
  * is chunked, synthesized per chunk, concatenated with a short gap, and encoded
@@ -139,15 +141,18 @@ export async function synthesizeToMp3(
   const tts = await getKokoro();
   const indic = isIndic(language);
   const voice = indic ? env.storyVoiceUr : env.storyVoiceEn;
+  // Urdu text -> espeak Urdu voice (keeps Urdu sounds); Hindi text -> Hindi voice.
+  const l = language.toLowerCase();
+  const espeakVoice = l === "hi" || l.startsWith("hi-") ? "hi" : "ur";
   let sampleRate = 24000;
   const parts: Float32Array[] = [];
 
   for (let i = 0; i < chunks.length; i++) {
     let audio: { audio: Float32Array; sampling_rate: number };
     if (indic) {
-      // espeak Hindi phonemes -> Kokoro tokenizer -> model (bypasses kokoro-js's
+      // espeak phonemes -> Kokoro tokenizer -> model (bypasses kokoro-js's
       // English-only phonemizer + voice-list validation).
-      const ph = await espeakIpa(chunks[i], "hi");
+      const ph = await espeakIpa(chunks[i], espeakVoice);
       if (!ph) continue;
       const { input_ids } = tts.tokenizer(ph, { truncation: true });
       audio = await tts.generate_from_ids(input_ids, { voice });
