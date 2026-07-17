@@ -23,7 +23,9 @@ export function AuthForm({ mode }: { mode: "login" | "register" }) {
       const res = await fetch(`/api/auth/${mode}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(isRegister ? { email, password, name } : { email, password }),
+        body: JSON.stringify(
+          isRegister ? { email, password, name } : { identifier: email, password },
+        ),
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || "Something went wrong");
@@ -58,6 +60,7 @@ export function AuthForm({ mode }: { mode: "login" | "register" }) {
               <label className="label">Name</label>
               <input
                 className="input"
+                required
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 placeholder="Jane Creator"
@@ -66,15 +69,15 @@ export function AuthForm({ mode }: { mode: "login" | "register" }) {
             </div>
           )}
           <div>
-            <label className="label">Email</label>
+            <label className="label">{isRegister ? "Email" : "Email or name"}</label>
             <input
               className="input"
-              type="email"
+              type={isRegister ? "email" : "text"}
               required
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              placeholder="you@example.com"
-              autoComplete="email"
+              placeholder={isRegister ? "you@example.com" : "you@example.com or your name"}
+              autoComplete={isRegister ? "email" : "username"}
             />
           </div>
           <div>

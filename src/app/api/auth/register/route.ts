@@ -6,15 +6,21 @@ import { hashPassword, createSessionToken, setSessionCookie } from "@/lib/auth";
 const schema = z.object({
   email: z.string().email(),
   password: z.string().min(8, "Password must be at least 8 characters"),
-  name: z.string().max(120).optional(),
+  name: z.string().trim().min(1, "Name is required").max(120),
 });
 
 export const POST = handler(async (req) => {
   const { email, password, name } = await parseBody(req, schema);
   const normalized = email.toLowerCase().trim();
 
-  const existing = await prisma.user.findUnique({ where: { email: normalized } });
-  if (existing) throw new ApiError(409, "An account with that email already exists.");
+  const existingEmail = await prisma.user.findUnique({ where: { email: normalized } });
+  if (existingEmail) throw new ApiError(409, "An account with that email already exists.");
+
+  // Names double as a login identifier, so they must be unique (case-insensitive).
+  const existingName = await prisma.user.findFirst({
+    where: { name: { equals: name, mode: "insensitive" } },
+  });
+  if (existingName) throw new ApiError(409, "That name is taken. Please choose another.");
 
   const user = await prisma.user.create({
     data: {

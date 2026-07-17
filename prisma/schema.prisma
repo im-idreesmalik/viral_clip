@@ -73,7 +73,7 @@ model User {
   id           String   @id @default(cuid())
   email        String   @unique
   passwordHash String
-  name         String?
+  name         String?  @unique // display name; also usable as a login identifier
   handle       String? // @username watermarked onto rendered clips
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
