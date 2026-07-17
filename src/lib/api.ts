@@ -64,6 +64,18 @@ export async function requireSession(): Promise<SessionPayload> {
   return session;
 }
 
+/** True if the email is configured as a superuser (ADMIN_EMAILS). */
+export function isAdminEmail(email: string | null | undefined): boolean {
+  return !!email && env.adminEmails.includes(email.toLowerCase());
+}
+
+/** Require an authenticated admin; throws 401 if unauthed, 403 if not admin. */
+export async function requireAdmin(): Promise<SessionPayload> {
+  const session = await requireSession();
+  if (!isAdminEmail(session.email)) throw new ApiError(403, "Admin access required");
+  return session;
+}
+
 /** Parse + validate a JSON body against a Zod schema. */
 export async function parseBody<T>(req: Request, schema: ZodSchema<T>): Promise<T> {
   let json: unknown;

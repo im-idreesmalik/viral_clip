@@ -28,7 +28,15 @@ const NAV = [
   { href: "/dashboard/settings", label: "Settings", icon: "settings" },
 ];
 
-export function Sidebar({ user }: { user: { name: string | null; email: string } }) {
+const ADMIN_ITEM = { href: "/dashboard/admin", label: "Admin", icon: "shield_person", exact: false };
+
+export function Sidebar({
+  user,
+  isAdmin = false,
+}: {
+  user: { name: string | null; email: string };
+  isAdmin?: boolean;
+}) {
   const pathname = usePathname();
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -55,9 +63,11 @@ export function Sidebar({ user }: { user: { name: string | null; email: string }
     </Link>
   );
 
+  const navItems = isAdmin ? [...NAV, ADMIN_ITEM] : NAV;
+
   const nav = (
     <nav className="flex-1 space-y-1">
-      {NAV.map((item) => {
+      {navItems.map((item) => {
         const active = item.exact ? pathname === item.href : pathname.startsWith(item.href);
         return (
           <Link

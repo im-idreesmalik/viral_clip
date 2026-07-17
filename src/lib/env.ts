@@ -45,6 +45,13 @@ export const env = {
 
   encryptionKey: process.env.ENCRYPTION_KEY || "",
 
+  // Superuser accounts (comma-separated emails) that can access the admin panel
+  // and see all users + their activity. Compared case-insensitively.
+  adminEmails: (process.env.ADMIN_EMAILS || "")
+    .split(",")
+    .map((e) => e.trim().toLowerCase())
+    .filter(Boolean),
+
   storageDir: STORAGE_DIR,
   mediaPublicBase: process.env.MEDIA_PUBLIC_BASE || "",
 
