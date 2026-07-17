@@ -20,6 +20,7 @@ export default function GenericPage() {
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
   const [progress, setProgress] = useState(0);
+  const [isAdmin, setIsAdmin] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
   const toast = useToast();
 
@@ -35,7 +36,21 @@ export default function GenericPage() {
 
   useEffect(() => {
     load();
+    api<{ isAdmin: boolean }>("/api/auth/me")
+      .then((r) => setIsAdmin(r.isAdmin))
+      .catch(() => undefined);
   }, [load]);
+
+  async function remove(name: string) {
+    if (!confirm(`Delete "${name}" from the shared library? This affects everyone.`)) return;
+    try {
+      await api(`/api/generic?name=${encodeURIComponent(name)}`, { method: "DELETE" });
+      toast.success("Deleted");
+      await load();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Delete failed");
+    }
+  }
 
   function uploadOne(file: File): Promise<void> {
     return new Promise((resolve, reject) => {
@@ -86,32 +101,43 @@ export default function GenericPage() {
       <h1 className="mb-1 text-2xl font-semibold">Generic footage</h1>
       <p className="mb-6 text-sm text-ink-400">
         Stock clips for <strong>Generic</strong> mode — they replace the visuals while your original
-        audio is kept. Uploads are automatically converted to vertical (9:16). This library is shared
-        with everyone.
+        audio is kept, converted to vertical (9:16). This shared library is{" "}
+        {isAdmin ? "managed by you (admin)" : "managed by an administrator — you can use these clips in Generic mode"}.
       </p>
 
-      <input
-        ref={fileRef}
-        type="file"
-        accept="video/*"
-        multiple
-        className="hidden"
-        onChange={onFiles}
-      />
-      <div className="mb-6">
-        <button onClick={() => fileRef.current?.click()} disabled={uploading} className="btn-primary">
-          {uploading
-            ? progress < 100
-              ? `Uploading… ${progress}%`
-              : "Converting to 9:16…"
-            : "⬆ Upload generic videos"}
-        </button>
-        {uploading && (
-          <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-ink-700">
-            <div className="h-full bg-brand-gradient transition-all" style={{ width: `${progress}%` }} />
+      {isAdmin && (
+        <>
+          <input
+            ref={fileRef}
+            type="file"
+            accept="video/*"
+            multiple
+            className="hidden"
+            onChange={onFiles}
+          />
+          <div className="mb-6">
+            <button
+              onClick={() => fileRef.current?.click()}
+              disabled={uploading}
+              className="btn-primary"
+            >
+              {uploading
+                ? progress < 100
+                  ? `Uploading… ${progress}%`
+                  : "Converting to 9:16…"
+                : "⬆ Upload generic videos"}
+            </button>
+            {uploading && (
+              <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-ink-700">
+                <div
+                  className="h-full bg-brand-gradient transition-all"
+                  style={{ width: `${progress}%` }}
+                />
+              </div>
+            )}
           </div>
-        )}
-      </div>
+        </>
+      )}
 
       {loading ? (
         <div className="grid grid-cols-3 gap-3 sm:grid-cols-4 lg:grid-cols-6">
@@ -124,7 +150,9 @@ export default function GenericPage() {
           <div className="mb-3 text-4xl">🎞️</div>
           <p className="font-medium">No generic footage yet</p>
           <p className="mt-1 text-sm text-ink-400">
-            Upload stock clips to use as background footage.
+            {isAdmin
+              ? "Upload stock clips to use as background footage."
+              : "An administrator hasn't added any stock clips yet."}
           </p>
         </div>
       ) : (
@@ -138,11 +166,22 @@ export default function GenericPage() {
                 preload="metadata"
                 className="aspect-[9/16] w-full bg-neutral-950 object-cover"
               />
-              <div className="p-3">
-                <div className="truncate text-sm font-medium" title={it.name}>
-                  {it.name}
+              <div className="flex items-start justify-between gap-2 p-3">
+                <div className="min-w-0">
+                  <div className="truncate text-sm font-medium" title={it.name}>
+                    {it.name}
+                  </div>
+                  <div className="text-xs text-ink-400">{formatMB(it.sizeBytes)}</div>
                 </div>
-                <div className="text-xs text-ink-400">{formatMB(it.sizeBytes)}</div>
+                {isAdmin && (
+                  <button
+                    onClick={() => remove(it.name)}
+                    aria-label={`Delete ${it.name}`}
+                    className="shrink-0 text-ink-400 transition-colors hover:text-red-600"
+                  >
+                    <span className="material-symbols-outlined text-[18px]">delete</span>
+                  </button>
+                )}
               </div>
             </div>
           ))}

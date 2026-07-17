@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { api, PLATFORM_META } from "@/lib/client";
 import type { PlatformName, PublicationStatus, VideoStatus } from "@/lib/types";
 import { VideoStatusBadge, PublicationStatusBadge } from "@/components/dashboard/badges";
+import { useToast } from "@/components/ui/Toast";
 
 interface AdminUser {
   id: string;
@@ -55,6 +56,8 @@ export default function AdminPage() {
   const [data, setData] = useState<Overview | null>(null);
   const [loading, setLoading] = useState(true);
   const [denied, setDenied] = useState(false);
+  const [busy, setBusy] = useState<string | null>(null);
+  const toast = useToast();
 
   const load = useCallback(async () => {
     try {
@@ -69,6 +72,21 @@ export default function AdminPage() {
   useEffect(() => {
     load();
   }, [load]);
+
+  async function deleteVideo(id: string, title: string) {
+    if (!confirm(`Delete "${title}" and all its clips? This permanently removes the owner's video.`))
+      return;
+    setBusy(id);
+    try {
+      await api(`/api/admin/videos/${id}`, { method: "DELETE" });
+      toast.success("Video deleted");
+      await load();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Delete failed");
+    } finally {
+      setBusy(null);
+    }
+  }
 
   if (denied) {
     return (
@@ -167,6 +185,14 @@ export default function AdminPage() {
                       {v.owner} · {v.clips} clips · {when(v.createdAt)}
                     </div>
                   </div>
+                  <button
+                    onClick={() => deleteVideo(v.id, v.title)}
+                    disabled={busy === v.id}
+                    aria-label={`Delete ${v.title}`}
+                    className="shrink-0 text-ink-400 transition-colors hover:text-red-600 disabled:opacity-40"
+                  >
+                    <span className="material-symbols-outlined text-[18px]">delete</span>
+                  </button>
                 </div>
               ))
             ) : (

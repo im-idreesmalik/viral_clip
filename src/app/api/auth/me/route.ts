@@ -1,13 +1,13 @@
 import { z } from "zod";
 import { prisma } from "@/lib/db";
-import { handler, ok, parseBody, requireSession } from "@/lib/api";
+import { handler, ok, parseBody, requireSession, isAdminEmail } from "@/lib/api";
 
 const SELECT = { id: true, email: true, name: true, handle: true, createdAt: true } as const;
 
 export const GET = handler(async () => {
   const session = await requireSession();
   const user = await prisma.user.findUnique({ where: { id: session.sub }, select: SELECT });
-  return ok({ user });
+  return ok({ user, isAdmin: isAdminEmail(session.email) });
 });
 
 const patchSchema = z.object({

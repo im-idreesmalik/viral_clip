@@ -3,7 +3,7 @@ import { createWriteStream } from "node:fs";
 import { pipeline } from "node:stream/promises";
 import fsp from "node:fs/promises";
 import path from "node:path";
-import { handler, ok, created, requireSession, ApiError } from "@/lib/api";
+import { handler, ok, created, requireSession, requireAdmin, ApiError } from "@/lib/api";
 import { env } from "@/lib/env";
 import { listGenericFootage, nextGenericName, resolveKey, ensureDirFor } from "@/lib/storage";
 import { normalizeToVertical } from "@/services/video/ffmpeg";
@@ -45,9 +45,10 @@ export const GET = handler(async () => {
   return ok(items);
 });
 
-// POST /api/generic — upload a generic video into storage/generic.
+// POST /api/generic — upload a generic video into storage/generic. Admin only
+// (the shared library is managed by superusers; everyone else just uses it).
 export const POST = handler(async (req) => {
-  await requireSession();
+  await requireAdmin();
 
   // Reject oversized uploads up front (before reading the body) to protect disk.
   const contentLength = Number(req.headers.get("content-length") || 0);
@@ -93,4 +94,14 @@ export const POST = handler(async (req) => {
   }
 
   return created({ name: safe });
+});
+
+// DELETE /api/generic?name=<file> — remove a generic clip. Admin only.
+export const DELETE = handler(async (req) => {
+  await requireAdmin();
+  const raw = new URL(req.url).searchParams.get("name");
+  if (!raw) throw new ApiError(400, "Missing 'name'.");
+  const name = path.basename(raw); // strip any path components
+  await fsp.rm(resolveKey(`generic/${name}`), { force: true });
+  return ok({ deleted: name });
 });
