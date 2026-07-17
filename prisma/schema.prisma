@@ -103,6 +103,10 @@ model Video {
   segmentSeconds  Int      @default(45) // target clip length for FULL mode
   targetClipCount Int      @default(8) // soft cap on clips (VIRAL mode only)
   burnCaptions    Boolean  @default(true) // generate + burn in subtitles
+  captionStyle    String   @default("default") // subtitle look preset (see subtitles.ts)
+  // Optional short title burned at the top of every clip (above "Part N").
+  shortTitle      String?
+  showShortTitle  Boolean  @default(false)
   // Transcription language: "auto" detects it, or an ISO code ("en","ur","hi",…).
   // Set per-video because auto-detect confuses close languages (Urdu vs Hindi).
   language        String   @default("auto")

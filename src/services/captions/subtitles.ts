@@ -32,11 +32,38 @@ export interface CaptionResult {
  * Build captions for the window [startSec, endSec] of the source video.
  * Returns empty (but valid) files when no words fall in the window.
  */
+// Subtitle look presets. ASS colours are &HAABBGGRR (alpha,blue,green,red).
+// `latinFont` swaps the face for Latin text only (non-Latin keeps its script font).
+export type CaptionStyle = "default" | "bold" | "yellow" | "boxed";
+interface StyleSpec {
+  primary: string;
+  outline: string;
+  back: string;
+  borderStyle: 1 | 3; // 1 = outline+shadow, 3 = opaque box
+  outlineW: number;
+  fontsize: number;
+  latinFont?: string;
+}
+export const CAPTION_STYLES: Record<CaptionStyle, StyleSpec> = {
+  default: { primary: "&H00FFFFFF", outline: "&H00000000", back: "&H64000000", borderStyle: 1, outlineW: 5, fontsize: 72 },
+  bold: { primary: "&H00FFFFFF", outline: "&H00000000", back: "&H64000000", borderStyle: 1, outlineW: 7, fontsize: 84, latinFont: "Impact" },
+  yellow: { primary: "&H0000FFFF", outline: "&H00000000", back: "&H64000000", borderStyle: 1, outlineW: 7, fontsize: 78 },
+  boxed: { primary: "&H00FFFFFF", outline: "&H00000000", back: "&HB0000000", borderStyle: 3, outlineW: 4, fontsize: 70 },
+};
+export const CAPTION_STYLE_LABELS: Record<CaptionStyle, string> = {
+  default: "Classic (white)",
+  bold: "Bold display",
+  yellow: "Bold yellow",
+  boxed: "Boxed",
+};
+
 export interface CaptionOptions {
   /** .ass font family (must be findable by libass). Default "Arial". */
   fontFamily?: string;
   /** Uppercase the burned text (Latin only). Default true. */
   uppercase?: boolean;
+  /** Visual preset. Default "default". */
+  style?: CaptionStyle;
 }
 
 export function buildCaptions(
@@ -56,8 +83,14 @@ export function buildCaptions(
 
   const cues = groupIntoCues(windowWords);
   const text = cues.map((c) => c.text).join(" ");
+
+  const baseFont = opts.fontFamily ?? "Arial";
+  const spec = CAPTION_STYLES[opts.style ?? "default"];
+  // Only swap to a Latin display font when the script font is the Latin default.
+  const fontFamily = spec.latinFont && baseFont === "Arial" ? spec.latinFont : baseFont;
+
   return {
-    ass: buildAss(cues, opts.fontFamily ?? "Arial", opts.uppercase ?? true),
+    ass: buildAss(cues, { fontFamily, uppercase: opts.uppercase ?? true, spec }),
     srt: buildSrt(cues),
     text,
     cues,
@@ -105,7 +138,12 @@ function groupIntoCues(words: { start: number; end: number; word: string }[]): C
 
 // ---- ASS (Advanced SubStation Alpha) for burn-in --------------------------
 
-function buildAss(cues: Cue[], fontFamily: string, uppercase: boolean): string {
+function buildAss(
+  cues: Cue[],
+  opts: { fontFamily: string; uppercase: boolean; spec: StyleSpec },
+): string {
+  const { fontFamily, uppercase, spec } = opts;
+  const styleLine = `Style: Default,${fontFamily},${spec.fontsize},${spec.primary},${spec.outline},${spec.back},-1,0,${spec.borderStyle},${spec.outlineW},2,2,80,80,420,1`;
   const header = `[Script Info]
 ScriptType: v4.00+
 PlayResX: ${VERTICAL_WIDTH}
@@ -115,7 +153,7 @@ ScaledBorderAndShadow: yes
 
 [V4+ Styles]
 Format: Name, Fontname, Fontsize, PrimaryColour, OutlineColour, BackColour, Bold, Italic, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
-Style: Default,${fontFamily},72,&H00FFFFFF,&H00000000,&H64000000,-1,0,1,5,2,2,80,80,420,1
+${styleLine}
 
 [Events]
 Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text`;

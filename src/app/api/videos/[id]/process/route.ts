@@ -15,6 +15,9 @@ const schema = z
     segmentSeconds: z.number().int().min(15).max(60).optional(),
     targetClipCount: z.number().int().min(1).max(30).optional(),
     burnCaptions: z.boolean().optional(),
+    captionStyle: z.string().max(20).optional(),
+    shortTitle: z.string().max(80).nullable().optional(),
+    showShortTitle: z.boolean().optional(),
     footageMode: z.nativeEnum(FootageMode).optional(),
     language: z.string().max(10).optional(),
   })
@@ -50,6 +53,10 @@ export const POST = handler(async (req, ctx: Ctx) => {
       segmentSeconds: overrides?.segmentSeconds ?? video.segmentSeconds,
       targetClipCount: overrides?.targetClipCount ?? video.targetClipCount,
       burnCaptions: overrides?.burnCaptions ?? video.burnCaptions,
+      captionStyle: overrides?.captionStyle ?? video.captionStyle,
+      shortTitle:
+        overrides?.shortTitle !== undefined ? overrides.shortTitle : video.shortTitle,
+      showShortTitle: overrides?.showShortTitle ?? video.showShortTitle,
       footageMode: overrides?.footageMode ?? video.footageMode,
       language: overrides?.language ?? video.language,
       // Drop the cached transcript so reprocessing re-transcribes with the

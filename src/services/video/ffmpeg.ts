@@ -169,6 +169,8 @@ export interface RenderClipOptions {
   subtitleFontsDir?: string;
   /** Text burned into the top band of the vertical frame (e.g. "Part 3"). */
   partLabel?: string;
+  /** Optional short title burned ABOVE the part label (topmost). */
+  topLabel?: string;
   /** GENERIC footage mode: stock video paths whose visuals replace the
    *  original's (muted). The original audio (from `input`) is kept. */
   genericInputs?: string[];
@@ -189,6 +191,7 @@ function buildVerticalFilter(opts: {
   subtitlePath?: string;
   subtitleFontsDir?: string;
   partLabel?: string;
+  topLabel?: string;
   watermark?: string;
   inputLabel?: string;
 }): string {
@@ -211,8 +214,16 @@ function buildVerticalFilter(opts: {
     lastLabel = "subbed";
   }
   if (opts.partLabel) {
-    chain.push(`[${lastLabel}]${drawTextArg(opts.partLabel)}[titled]`);
+    // Part number sits a bit lower to leave room for the short title above it.
+    chain.push(`[${lastLabel}]${drawTextArg(opts.partLabel, { y: "h*0.135" })}[titled]`);
     lastLabel = "titled";
+  }
+  if (opts.topLabel) {
+    // Short title, topmost, smaller than the part number.
+    chain.push(
+      `[${lastLabel}]${drawTextArg(opts.topLabel, { fontsize: 60, y: "h*0.05", borderw: 5 })}[toptitle]`,
+    );
+    lastLabel = "toptitle";
   }
   if (opts.watermark) {
     chain.push(
@@ -311,7 +322,7 @@ function applyEncoder(command: ReturnType<typeof ffmpeg>, encoder: string) {
 }
 
 export async function renderClip(opts: RenderClipOptions): Promise<void> {
-  const { input, output, startSec, endSec, subtitlePath, subtitleFontsDir, partLabel, genericInputs, watermark, vertical = true, onProgress } = opts;
+  const { input, output, startSec, endSec, subtitlePath, subtitleFontsDir, partLabel, topLabel, genericInputs, watermark, vertical = true, onProgress } = opts;
   const duration = Math.max(0.1, endSec - startSec);
 
   // Detect audio up front so we only build the audio chain when there's a
@@ -319,12 +330,13 @@ export async function renderClip(opts: RenderClipOptions): Promise<void> {
   const meta = await probe(input).catch(() => null);
   const hasAudio = meta?.hasAudio ?? true;
 
-  // Only burn the "Part N" title if the font is available — otherwise skip it
+  // Only burn drawtext overlays if the font is available — otherwise skip them
   // rather than fail the whole render.
   const fontOk = fs.existsSync(env.fontFile || "C:/Windows/Fonts/arialbd.ttf");
   const titleLabel = partLabel && fontOk ? partLabel : undefined;
+  const topTitle = topLabel && fontOk ? topLabel : undefined;
   const wmLabel = watermark && fontOk ? watermark : undefined;
-  if ((partLabel || watermark) && !fontOk) {
+  if ((partLabel || topLabel || watermark) && !fontOk) {
     log.warn("Title font not found; skipping burned-in text", { font: env.fontFile });
   }
 
@@ -352,9 +364,9 @@ export async function renderClip(opts: RenderClipOptions): Promise<void> {
           );
           const cat = generic.map((_, i) => `[g${i}]`).join("");
           const reel = `${norm.join(";")};${cat}concat=n=${generic.length}:v=1:a=0[gcat];[gcat]trim=0:${duration.toFixed(3)},setpts=PTS-STARTPTS[gv]`;
-          filter = `${reel};${buildVerticalFilter({ subtitlePath, subtitleFontsDir, partLabel: titleLabel, watermark: wmLabel, inputLabel: "gv" })}`;
+          filter = `${reel};${buildVerticalFilter({ subtitlePath, subtitleFontsDir, partLabel: titleLabel, topLabel: topTitle, watermark: wmLabel, inputLabel: "gv" })}`;
         } else {
-          filter = buildVerticalFilter({ subtitlePath, subtitleFontsDir, partLabel: titleLabel, watermark: wmLabel });
+          filter = buildVerticalFilter({ subtitlePath, subtitleFontsDir, partLabel: titleLabel, topLabel: topTitle, watermark: wmLabel });
         }
         // Audio always comes from the original (input 0), even in GENERIC mode.
         const maps = ["-map", "[v]"];

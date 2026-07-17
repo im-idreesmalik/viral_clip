@@ -4,6 +4,7 @@ import { useState } from "react";
 import { api } from "@/lib/client";
 import type { VideoDTO, ClipMode } from "@/lib/types";
 import { LANGUAGES } from "@/lib/languages";
+import { CAPTION_STYLE_OPTIONS } from "@/lib/caption-styles";
 import { useToast } from "@/components/ui/Toast";
 
 /**
@@ -24,6 +25,9 @@ export function ReprocessDialog({
   const [segmentSeconds, setSegmentSeconds] = useState(video.segmentSeconds);
   const [targetClipCount, setTargetClipCount] = useState(video.targetClipCount);
   const [burnCaptions, setBurnCaptions] = useState(video.burnCaptions);
+  const [captionStyle, setCaptionStyle] = useState(video.captionStyle || "default");
+  const [showShortTitle, setShowShortTitle] = useState(video.showShortTitle);
+  const [shortTitle, setShortTitle] = useState(video.shortTitle ?? "");
   const [footageMode, setFootageMode] = useState<"ORIGINAL" | "GENERIC">(video.footageMode);
   const [language, setLanguage] = useState(video.language || "auto");
   const [busy, setBusy] = useState(false);
@@ -42,6 +46,9 @@ export function ReprocessDialog({
           segmentSeconds,
           targetClipCount,
           burnCaptions,
+          captionStyle,
+          showShortTitle,
+          shortTitle,
           footageMode: clipMode === "FULL" ? footageMode : "ORIGINAL",
           language,
         }),
@@ -145,18 +152,54 @@ export function ReprocessDialog({
           Add captions (subtitles)
         </label>
 
-        {/* Language — only relevant when captions are generated. */}
+        {/* Language + subtitle style — only relevant when captions are on. */}
         {burnCaptions && (
-          <div className="mt-4">
-            <label className="label">Spoken language</label>
-            <select className="input" value={language} onChange={(e) => setLanguage(e.target.value)}>
-              {LANGUAGES.map((l) => (
-                <option key={l.code} value={l.code}>
-                  {l.label}
-                </option>
-              ))}
-            </select>
-          </div>
+          <>
+            <div className="mt-4">
+              <label className="label">Spoken language</label>
+              <select className="input" value={language} onChange={(e) => setLanguage(e.target.value)}>
+                {LANGUAGES.map((l) => (
+                  <option key={l.code} value={l.code}>
+                    {l.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="mt-4">
+              <label className="label">Subtitle style</label>
+              <select
+                className="input"
+                value={captionStyle}
+                onChange={(e) => setCaptionStyle(e.target.value)}
+              >
+                {CAPTION_STYLE_OPTIONS.map((s) => (
+                  <option key={s.value} value={s.value}>
+                    {s.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </>
+        )}
+
+        {/* Short title burned at the top of every clip */}
+        <label className="mt-4 flex items-center gap-2 text-sm">
+          <input
+            type="checkbox"
+            checked={showShortTitle}
+            onChange={(e) => setShowShortTitle(e.target.checked)}
+            className="h-4 w-4 accent-brand-500"
+          />
+          Add a short title on top of clips
+        </label>
+        {showShortTitle && (
+          <input
+            className="input mt-2"
+            value={shortTitle}
+            onChange={(e) => setShortTitle(e.target.value)}
+            placeholder="e.g. STORY TIME"
+            maxLength={80}
+          />
         )}
 
         {/* Footage (Full-video only) */}

@@ -17,7 +17,7 @@ import { resolveKey, ensureDirFor, writeFile, deleteKey } from "@/lib/storage";
 import { probe, renderClip, captureThumbnail, selectGenericFootage } from "./ffmpeg";
 import { downloadVideo } from "./download";
 import { transcribe, type Transcript } from "./transcription";
-import { buildCaptions } from "@/services/captions/subtitles";
+import { buildCaptions, type CaptionStyle } from "@/services/captions/subtitles";
 import { captionFont } from "@/services/captions/fonts";
 import { detectViralClips } from "@/services/ai/clipDetection";
 import { segmentVideo } from "@/services/ai/segmentation";
@@ -243,6 +243,7 @@ export async function renderClipRecord(clipId: string): Promise<void> {
     const captions = buildCaptions(transcript.words, clip.startSec, clip.endSec, {
       fontFamily: font.family,
       uppercase: font.uppercase,
+      style: clip.video.captionStyle as CaptionStyle,
     });
     if (captions.cues.length > 0) {
       await writeFile(assKey, Buffer.from(captions.ass, "utf8"));
@@ -278,6 +279,10 @@ export async function renderClipRecord(clipId: string): Promise<void> {
       subtitleFontsDir: subtitlePath ? env.fontsDir : undefined,
       partLabel:
         clip.video.clipMode === "FULL" && clip.order != null ? `Part ${clip.order}` : undefined,
+      topLabel:
+        clip.video.showShortTitle && clip.video.shortTitle?.trim()
+          ? clip.video.shortTitle.trim()
+          : undefined,
       genericInputs,
       watermark,
       vertical: true,

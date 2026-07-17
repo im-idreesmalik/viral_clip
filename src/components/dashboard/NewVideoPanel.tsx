@@ -4,6 +4,7 @@ import { useState } from "react";
 import { api } from "@/lib/client";
 import type { ClipMode } from "@/lib/types";
 import { LANGUAGES } from "@/lib/languages";
+import { CAPTION_STYLE_OPTIONS } from "@/lib/caption-styles";
 import { useToast } from "@/components/ui/Toast";
 
 export function NewVideoPanel({ onCreated }: { onCreated: () => void }) {
@@ -15,7 +16,10 @@ export function NewVideoPanel({ onCreated }: { onCreated: () => void }) {
   const [segmentSeconds, setSegmentSeconds] = useState(45);
   const [targetClipCount, setTargetClipCount] = useState(8);
   const [burnCaptions, setBurnCaptions] = useState(true);
+  const [captionStyle, setCaptionStyle] = useState("default");
   const [language, setLanguage] = useState("auto");
+  const [showShortTitle, setShowShortTitle] = useState(false);
+  const [shortTitle, setShortTitle] = useState("");
   const [footageMode, setFootageMode] = useState<"ORIGINAL" | "GENERIC">("ORIGINAL");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -38,6 +42,9 @@ export function NewVideoPanel({ onCreated }: { onCreated: () => void }) {
             segmentSeconds,
             targetClipCount,
             burnCaptions,
+            captionStyle,
+            showShortTitle,
+            shortTitle,
             footageMode,
             language,
           }),
@@ -68,6 +75,9 @@ export function NewVideoPanel({ onCreated }: { onCreated: () => void }) {
       form.append("segmentSeconds", String(segmentSeconds));
       form.append("targetClipCount", String(targetClipCount));
       form.append("burnCaptions", String(burnCaptions));
+      form.append("captionStyle", captionStyle);
+      form.append("showShortTitle", String(showShortTitle));
+      form.append("shortTitle", shortTitle);
       form.append("footageMode", footageMode);
       form.append("language", language);
 
@@ -210,22 +220,58 @@ export function NewVideoPanel({ onCreated }: { onCreated: () => void }) {
         Add captions (subtitles)
       </label>
 
-      {/* Spoken language — only relevant when captions are generated. */}
+      {/* Spoken language + caption style — only relevant when captions are on. */}
       {burnCaptions && (
-        <div className="mt-4">
-          <label className="label">Spoken language</label>
-          <select className="input" value={language} onChange={(e) => setLanguage(e.target.value)}>
-            {LANGUAGES.map((l) => (
-              <option key={l.code} value={l.code}>
-                {l.label}
-              </option>
-            ))}
-          </select>
-          <p className="mt-1 text-xs text-ink-100/50">
-            The language spoken in the video. Auto-detect can confuse similar languages
-            (e.g. Urdu vs Hindi) — choosing it directly is more accurate.
-          </p>
-        </div>
+        <>
+          <div className="mt-4">
+            <label className="label">Spoken language</label>
+            <select className="input" value={language} onChange={(e) => setLanguage(e.target.value)}>
+              {LANGUAGES.map((l) => (
+                <option key={l.code} value={l.code}>
+                  {l.label}
+                </option>
+              ))}
+            </select>
+            <p className="mt-1 text-xs text-ink-100/50">
+              Auto-detect can confuse similar languages (e.g. Urdu vs Hindi) — choosing it directly
+              is more accurate.
+            </p>
+          </div>
+          <div className="mt-4">
+            <label className="label">Subtitle style</label>
+            <select
+              className="input"
+              value={captionStyle}
+              onChange={(e) => setCaptionStyle(e.target.value)}
+            >
+              {CAPTION_STYLE_OPTIONS.map((s) => (
+                <option key={s.value} value={s.value}>
+                  {s.label}
+                </option>
+              ))}
+            </select>
+          </div>
+        </>
+      )}
+
+      {/* Short title burned at the top of every clip */}
+      <label className="mt-4 flex items-center gap-2 text-sm">
+        <input
+          type="checkbox"
+          checked={showShortTitle}
+          onChange={(e) => setShowShortTitle(e.target.checked)}
+          className="h-4 w-4 accent-brand-500"
+        />
+        Add a short title on top of clips
+      </label>
+      {showShortTitle && (
+        <input
+          className="input mt-2"
+          value={shortTitle}
+          onChange={(e) => setShortTitle(e.target.value)}
+          placeholder="e.g. STORY TIME"
+          maxLength={80}
+        />
       )}
 
       {clipMode === "FULL" && (
