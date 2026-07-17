@@ -8,6 +8,8 @@ export interface CaptionFont {
   family: string;
   /** Uppercase the cue text? Only meaningful for Latin scripts. */
   uppercase: boolean;
+  /** Right-to-left script (Arabic/Urdu)? Affects karaoke sweep direction. */
+  rtl: boolean;
 }
 
 // Arabic-script languages (incl. Urdu). We use Noto Naskh Arabic — it shapes
@@ -17,8 +19,8 @@ const DEVANAGARI = new Set(["hi", "mr", "ne"]);
 
 export function captionFont(language: string | null | undefined): CaptionFont {
   const lang = (language || "auto").toLowerCase();
-  if (ARABIC_SCRIPT.has(lang)) return { family: "Noto Naskh Arabic", uppercase: false };
-  if (DEVANAGARI.has(lang)) return { family: "Noto Sans Devanagari", uppercase: false };
-  // Latin / auto-detect: the default look (bold uppercase Arial).
-  return { family: "Arial", uppercase: true };
+  if (ARABIC_SCRIPT.has(lang)) return { family: "Noto Naskh Arabic", uppercase: false, rtl: true };
+  if (DEVANAGARI.has(lang)) return { family: "Noto Sans Devanagari", uppercase: false, rtl: false };
+  // Latin / auto-detect (incl. romanized "Hinglish"): bold uppercase Arial.
+  return { family: "Arial", uppercase: true, rtl: false };
 }

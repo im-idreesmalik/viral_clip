@@ -17,6 +17,7 @@ import { execFile, spawn } from "node:child_process";
 import { promisify } from "node:util";
 import { env } from "@/lib/env";
 import { createLogger } from "@/lib/logger";
+import { romanizeDevanagari } from "@/services/captions/romanize";
 import { extractAudio, extractAudioMp3, extractPcmF32, probe } from "./ffmpeg";
 
 const execFileAsync = promisify(execFile);
@@ -331,7 +332,11 @@ async function transcribeLocal(videoPath: string, language?: string): Promise<Tr
     throw new Error("WHISPER_CLI and WHISPER_MODEL are required for the local provider.");
   }
   // Per-video language wins over the global default; "auto" lets whisper detect.
-  const lang = language || env.whisperLanguage || "auto";
+  const requested = language || env.whisperLanguage || "auto";
+  // "Hinglish": transcribe the Hindustani speech as Hindi (Devanagari), then
+  // romanize the result to casual Latin ("kahani suno").
+  const romanize = requested === "hi-Latn";
+  const lang = romanize ? "hi" : requested;
   const tmpRoot = await fsp.mkdtemp(path.join(os.tmpdir(), "vc-stt-"));
   try {
     const wavPath = path.join(tmpRoot, "audio.wav");
@@ -364,7 +369,8 @@ async function transcribeLocal(videoPath: string, language?: string): Promise<Tr
     } catch {
       throw new Error("whisper.cpp produced invalid/partial JSON output.");
     }
-    return parseWhisperCppJson(json);
+    const transcript = parseWhisperCppJson(json);
+    return romanize ? romanizeTranscript(transcript) : transcript;
   } finally {
     await fsp.rm(tmpRoot, { recursive: true, force: true });
   }
@@ -393,4 +399,14 @@ function parseWhisperCppJson(json: WhisperCppJson): Transcript {
     words.push({ start, end, word: t });
   }
   return { text, segments, words, provider: "local" };
+}
+
+/** Romanize every text field of a transcript (Devanagari → Latin "Hinglish"). */
+function romanizeTranscript(t: Transcript): Transcript {
+  return {
+    ...t,
+    text: romanizeDevanagari(t.text),
+    segments: t.segments.map((s) => ({ ...s, text: romanizeDevanagari(s.text) })),
+    words: t.words.map((w) => ({ ...w, word: romanizeDevanagari(w.word) })),
+  };
 }

@@ -29,6 +29,11 @@ const MAX_WORDS_PER_CUE = 4;
 const MAX_CUE_DURATION = 2.6;
 const MAX_CHARS_PER_CUE = 26;
 
+// Karaoke lines must never auto-wrap (libass drops the sweep timing if they
+// do), so we pack words into short explicit lines. ~13 chars is the widest
+// that reliably fits the large karaoke font on a 1080-wide frame.
+const KARAOKE_CHARS_PER_LINE = 13;
+
 export interface CaptionResult {
   ass: string;
   srt: string;
@@ -92,6 +97,8 @@ export interface CaptionOptions {
   uppercase?: boolean;
   /** Visual preset. Default "default". */
   style?: CaptionStyle;
+  /** Right-to-left script (Urdu/Arabic)? Changes karaoke to whole-word. */
+  rtl?: boolean;
 }
 
 export function buildCaptions(
@@ -118,7 +125,7 @@ export function buildCaptions(
   const fontFamily = spec.latinFont && baseFont === "Arial" ? spec.latinFont : baseFont;
 
   return {
-    ass: buildAss(cues, { fontFamily, uppercase: opts.uppercase ?? true, spec }),
+    ass: buildAss(cues, { fontFamily, uppercase: opts.uppercase ?? true, spec, rtl: opts.rtl ?? false }),
     srt: buildSrt(cues),
     text,
     cues,
@@ -167,9 +174,9 @@ function groupIntoCues(words: CueWord[]): Cue[] {
 
 function buildAss(
   cues: Cue[],
-  opts: { fontFamily: string; uppercase: boolean; spec: StyleSpec },
+  opts: { fontFamily: string; uppercase: boolean; spec: StyleSpec; rtl: boolean },
 ): string {
-  const { fontFamily, uppercase, spec } = opts;
+  const { fontFamily, uppercase, spec, rtl } = opts;
   const cased = (s: string) => (uppercase ? s.toUpperCase() : s);
   const styleLine = `Style: Default,${fontFamily},${spec.fontsize},${spec.primary},${spec.secondary},${spec.outline},${spec.back},-1,0,${spec.borderStyle},${spec.outlineW},3,2,80,80,340,1`;
   const header = `[Script Info]
@@ -189,17 +196,30 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text`
   const lines = cues.map((c) => {
     let body: string;
     if (spec.animate === "karaoke") {
-      // Sweep the highlight across each word in sync with when it's spoken.
-      const parts: string[] = [];
+      // Highlight each word in sync with when it's spoken. LTR uses \kf (a
+      // smooth left-to-right sweep); RTL scripts (Urdu/Arabic) use \k (an
+      // instant whole-word switch) because \kf always sweeps left-to-right,
+      // which runs backwards through a right-to-left word.
+      //
+      // Break long cues with explicit \N line breaks: libass silently drops
+      // karaoke timing on a line that AUTO-wraps, so it must never wrap on its
+      // own. Manual breaks keep the sweep animating.
+      const fill = rtl ? "k" : "kf";
+      const lines = packKaraokeLines(c.words, KARAOKE_CHARS_PER_LINE);
+      const rendered: string[] = [];
       let cursor = c.start;
-      for (const w of c.words) {
-        const gap = Math.max(0, Math.round((w.start - cursor) * 100));
-        if (gap > 0) parts.push(`{\\k${gap}}`);
-        const dur = Math.max(6, Math.round((w.end - w.start) * 100));
-        parts.push(`{\\kf${dur}}${escapeAss(cased(w.word))} `);
-        cursor = w.end;
+      for (const line of lines) {
+        const parts: string[] = [];
+        for (const w of line) {
+          const gap = Math.max(0, Math.round((w.start - cursor) * 100));
+          if (gap > 0) parts.push(`{\\k${gap}}`);
+          const dur = Math.max(6, Math.round((w.end - w.start) * 100));
+          parts.push(`{\\${fill}${dur}}${escapeAss(cased(w.word))} `);
+          cursor = w.end;
+        }
+        rendered.push(parts.join(""));
       }
-      body = parts.join("");
+      body = rendered.join("\\N");
     } else if (spec.animate === "pop") {
       // Fade + scale-up as the cue appears.
       body = `{\\fad(110,60)\\fscx55\\fscy55\\t(0,150,\\fscx100\\fscy100)}${escapeAss(cased(c.text))}`;
@@ -213,6 +233,25 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text`
 
 function escapeAss(text: string): string {
   return text.replace(/\n/g, "\\N").replace(/\{/g, "(").replace(/\}/g, ")");
+}
+
+/** Greedily pack words into short lines so a karaoke cue never auto-wraps. */
+function packKaraokeLines(words: CueWord[], maxChars: number): CueWord[][] {
+  const lines: CueWord[][] = [];
+  let current: CueWord[] = [];
+  let len = 0;
+  for (const w of words) {
+    const add = (current.length ? 1 : 0) + w.word.length;
+    if (current.length && len + add > maxChars) {
+      lines.push(current);
+      current = [];
+      len = 0;
+    }
+    current.push(w);
+    len += (current.length > 1 ? 1 : 0) + w.word.length;
+  }
+  if (current.length) lines.push(current);
+  return lines;
 }
 
 function assTime(sec: number): string {

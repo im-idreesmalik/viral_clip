@@ -8,6 +8,7 @@ export const LANGUAGES: { code: string; label: string }[] = [
   { code: "en", label: "English" },
   { code: "ur", label: "Urdu" },
   { code: "hi", label: "Hindi" },
+  { code: "hi-Latn", label: "Hinglish (Roman Urdu/Hindi)" },
   { code: "pa", label: "Punjabi" },
   { code: "ar", label: "Arabic" },
   { code: "ps", label: "Pashto" },

@@ -244,6 +244,7 @@ export async function renderClipRecord(clipId: string): Promise<void> {
       fontFamily: font.family,
       uppercase: font.uppercase,
       style: clip.video.captionStyle as CaptionStyle,
+      rtl: font.rtl,
     });
     if (captions.cues.length > 0) {
       await writeFile(assKey, Buffer.from(captions.ass, "utf8"));
