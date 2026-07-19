@@ -21,6 +21,13 @@ export default function SettingsPage() {
   const [handle, setHandle] = useState("");
   const [savingHandle, setSavingHandle] = useState(false);
   const [handleSaved, setHandleSaved] = useState(false);
+  // Account profile.
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [savingProfile, setSavingProfile] = useState(false);
   const toast = useToast();
 
   useEffect(() => {
@@ -31,10 +38,43 @@ export default function SettingsPage() {
       setConfig(cfg);
       setAccounts(acc.accounts.filter((a) => a.isActive));
     });
-    api<{ user: { handle: string | null } }>("/api/auth/me")
-      .then((res) => setHandle(res.user.handle ?? ""))
+    api<{ user: { handle: string | null; name: string | null; email: string } }>("/api/auth/me")
+      .then((res) => {
+        setHandle(res.user.handle ?? "");
+        setName(res.user.name ?? "");
+        setEmail(res.user.email ?? "");
+      })
       .catch(() => undefined);
   }, []);
+
+  async function saveProfile() {
+    if (newPassword && newPassword !== confirmPassword) {
+      toast.error("New passwords don't match.");
+      return;
+    }
+    setSavingProfile(true);
+    try {
+      const payload: Record<string, string> = {};
+      if (name.trim()) payload.name = name.trim();
+      if (email.trim()) payload.email = email.trim();
+      if (currentPassword) payload.currentPassword = currentPassword;
+      if (newPassword) payload.newPassword = newPassword;
+      const res = await api<{ user: { name: string | null; email: string } }>("/api/auth/me", {
+        method: "PATCH",
+        body: JSON.stringify(payload),
+      });
+      setName(res.user.name ?? "");
+      setEmail(res.user.email ?? "");
+      setCurrentPassword("");
+      setNewPassword("");
+      setConfirmPassword("");
+      toast.success("Profile updated");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to update profile");
+    } finally {
+      setSavingProfile(false);
+    }
+  }
 
   async function saveHandle() {
     setSavingHandle(true);
@@ -107,14 +147,101 @@ export default function SettingsPage() {
         <p className="text-sm text-ink-100/60">Your creator profile and auto-publishing preferences.</p>
       </div>
 
-      {/* Username / watermark */}
+      {/* Account profile */}
+      <div className="card space-y-4 p-6">
+        <div>
+          <h2 className="text-lg font-semibold">Profile</h2>
+          <p className="text-xs text-ink-100/55">Your account username, email, and password.</p>
+        </div>
+        <div>
+          <label className="label" htmlFor="name">
+            Username
+          </label>
+          <input
+            id="name"
+            type="text"
+            className="input"
+            maxLength={120}
+            placeholder="Your name"
+            autoComplete="username"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+          />
+        </div>
+        <div>
+          <label className="label" htmlFor="email">
+            Email
+          </label>
+          <input
+            id="email"
+            type="email"
+            className="input"
+            placeholder="you@example.com"
+            autoComplete="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+          />
+        </div>
+        <div className="border-t border-ink-800 pt-4">
+          <label className="label" htmlFor="curpw">
+            Current password
+          </label>
+          <p className="mb-1.5 text-xs text-ink-100/55">Required only to change your email or password.</p>
+          <input
+            id="curpw"
+            type="password"
+            className="input"
+            placeholder="••••••••"
+            autoComplete="current-password"
+            value={currentPassword}
+            onChange={(e) => setCurrentPassword(e.target.value)}
+          />
+        </div>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div>
+            <label className="label" htmlFor="newpw">
+              New password
+            </label>
+            <input
+              id="newpw"
+              type="password"
+              className="input"
+              placeholder="Leave blank to keep"
+              autoComplete="new-password"
+              value={newPassword}
+              onChange={(e) => setNewPassword(e.target.value)}
+            />
+          </div>
+          <div>
+            <label className="label" htmlFor="confpw">
+              Confirm new password
+            </label>
+            <input
+              id="confpw"
+              type="password"
+              className="input"
+              placeholder="Repeat new password"
+              autoComplete="new-password"
+              value={confirmPassword}
+              onChange={(e) => setConfirmPassword(e.target.value)}
+            />
+          </div>
+        </div>
+        <div>
+          <button className="btn-primary" onClick={saveProfile} disabled={savingProfile}>
+            {savingProfile ? "Saving…" : "Save profile"}
+          </button>
+        </div>
+      </div>
+
+      {/* Clip watermark */}
       <div className="card space-y-4 p-6">
         <div>
           <label className="label" htmlFor="handle">
-            Username
+            Clip watermark
           </label>
           <p className="mb-3 text-xs text-ink-100/55">
-            Added as a watermark on every clip you create. Leave blank for none.
+            An @username added as a watermark on every clip you create. Leave blank for none.
           </p>
           <div className="flex items-center gap-2">
             <div className="flex flex-1 items-center rounded-lg border border-ink-700 bg-ink-900 focus-within:border-brand-500">
