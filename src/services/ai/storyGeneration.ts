@@ -31,6 +31,12 @@ export interface GeneratedStory {
   title: string;
   text: string; // display script
   ttsText: string | null; // Devanagari for Urdu; null for English (speak `text`)
+  viralScore: number; // 0-100 — how viral/engaging the AI judges the story
+}
+
+function clampScore(n: number | null | undefined): number {
+  const v = Math.round(Number(n));
+  return Number.isFinite(v) ? Math.max(0, Math.min(100, v)) : 75;
 }
 
 // Roughly how many words a listener hears per minute at a calm narration pace.
@@ -68,6 +74,7 @@ const storySchema = z.object({
   title: z.string().min(1).max(160),
   text: z.string().min(1),
   ttsText: z.string().optional().default(""),
+  viralScore: z.number().optional().default(75),
 });
 
 const OUTPUT_JSON_SCHEMA = {
@@ -79,8 +86,13 @@ const OUTPUT_JSON_SCHEMA = {
       type: "string",
       description: "For Urdu: a Devanagari transliteration of the EXACT same words. For English: an empty string.",
     },
+    viralScore: {
+      type: "integer",
+      description:
+        "Your honest 0-100 estimate of how viral this story is as a short video — weigh hook strength, curiosity, universal relatability, emotional payoff, and shareability. Be discerning: reserve 90+ for truly exceptional hooks.",
+    },
   },
-  required: ["title", "text", "ttsText"],
+  required: ["title", "text", "ttsText", "viralScore"],
   additionalProperties: false,
 } as const;
 
@@ -107,7 +119,7 @@ async function generateStoryAnthropic(opts: GenerateStoryOptions, targetWords: n
   }
   // Urdu is narrated directly from its Arabic-script text now, so ignore any
   // Devanagari the model returned.
-  return { title: parsed.title.trim(), text: parsed.text.trim(), ttsText: null };
+  return { title: parsed.title.trim(), text: parsed.text.trim(), ttsText: null, viralScore: clampScore(parsed.viralScore) };
 }
 
 // ---- Ollama path (plain prose + continuation loop) ------------------------
@@ -118,14 +130,18 @@ async function generateStoryOllama(opts: GenerateStoryOptions, targetWords: numb
     "",
     "Respond as PLAIN TEXT in exactly this shape, with nothing else:",
     "TITLE: <a short, curiosity-driven title>",
+    "VIRAL: <an honest number 0-100 for how viral this story is as a short video>",
     "<blank line>",
     "<the full story text>",
   ].join("\n");
   const user = `Topic:\n${opts.topic}\n\nWrite the complete story now (at least ${targetWords} words).`;
 
   log.info("Generating story (Ollama)", { model: env.ollama.model, targetWords });
-  let raw = await runOllamaChat(system, user);
-  let { title, body } = parseTitleBody(raw);
+  const raw = await runOllamaChat(system, user);
+  const first = parseTitleBody(raw);
+  const title = first.title;
+  const viral = first.viral;
+  let body = first.body;
   let words = countWords(body);
 
   // Local models often stop short — top up with continuations until we're near
@@ -152,10 +168,10 @@ async function generateStoryOllama(opts: GenerateStoryOptions, targetWords: numb
 
   // Urdu is now narrated directly from its Arabic-script text (espeak -v ur),
   // so no Devanagari transliteration is needed.
-  return { title, text: body.trim(), ttsText: null };
+  return { title, text: body.trim(), ttsText: null, viralScore: clampScore(viral) };
 }
 
-function parseTitleBody(raw: string): { title: string; body: string } {
+function parseTitleBody(raw: string): { title: string; viral: number | null; body: string } {
   const text = raw.trim();
   const lines = text.split(/\r?\n/);
   let title = "";
@@ -164,10 +180,17 @@ function parseTitleBody(raw: string): { title: string; body: string } {
     title = lines[titleIdx].replace(/^\s*(?:title|عنوان|سرخی)\s*[:：]\s*/i, "").trim();
     lines.splice(titleIdx, 1);
   }
+  let viral: number | null = null;
+  const viralIdx = lines.findIndex((l) => /^\s*viral\s*[:：]/i.test(l));
+  if (viralIdx !== -1) {
+    const m = lines[viralIdx].match(/(\d{1,3})/);
+    if (m) viral = Number(m[1]);
+    lines.splice(viralIdx, 1);
+  }
   let body = lines.join("\n").trim();
   body = body.replace(/^\s*(?:story|کہانی|کہانی)\s*[:：]\s*/i, "").trim();
   if (!title) title = (body.split(/[.!?\n]/)[0] || "").slice(0, 80).trim() || "Untitled story";
-  return { title, body };
+  return { title, viral, body };
 }
 
 function countWords(s: string): number {
@@ -188,6 +211,23 @@ export async function transliterateUrduToDevanagari(urdu: string): Promise<strin
   return (env.anthropicApiKey ? runAnthropicText(system, urdu) : runOllamaChat(system, urdu, 0.2)).then((t) =>
     t.trim(),
   );
+}
+
+/**
+ * Rate an existing story's viral potential 0-100 (used to backfill stories that
+ * were written before the score existed). A single cheap AI call.
+ */
+export async function scoreStoryText(title: string, text: string): Promise<number> {
+  const system = [
+    "You rate how viral a narrated short-video story is on a 0-100 scale.",
+    "Weigh hook strength, curiosity, universal relatability, emotional payoff, and shareability.",
+    "Be discerning: reserve 90+ for truly exceptional hooks; average stories sit around 60-75.",
+    "Respond with ONLY the number — no words, no punctuation.",
+  ].join("\n");
+  const user = `Title: ${title}\n\nStory:\n${text.slice(0, 6000)}`;
+  const raw = env.anthropicApiKey ? await runAnthropicText(system, user) : await runOllamaChat(system, user, 0.3);
+  const m = raw.match(/\d{1,3}/);
+  return clampScore(m ? Number(m[0]) : 75);
 }
 
 // ---- Provider transports --------------------------------------------------

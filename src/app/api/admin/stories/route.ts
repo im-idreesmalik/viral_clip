@@ -43,7 +43,7 @@ export const POST = handler(async (req) => {
         topic: body.topic,
         language: body.language,
         source: StorySource.AI,
-        status: StoryStatus.GENERATING,
+        status: StoryStatus.QUEUED,
         text: "",
       },
     });

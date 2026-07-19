@@ -31,7 +31,7 @@ export const POST = handler(async (req) => {
     const text = (await file.text()).trim();
     if (text.length < 20) throw new ApiError(400, "The text file looks empty.");
     const story = await prisma.story.create({
-      data: { title, language, source: StorySource.UPLOAD, status: StoryStatus.GENERATING, text },
+      data: { title, language, source: StorySource.UPLOAD, status: StoryStatus.QUEUED, text },
     });
     await enqueueStoryAudio(story.id);
     return created(serializeStory(story, { includeAdmin: true }));

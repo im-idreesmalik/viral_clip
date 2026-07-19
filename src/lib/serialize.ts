@@ -146,6 +146,7 @@ export function serializeStory(
     language: s.language,
     source: s.source,
     status: s.status,
+    viralScore: s.viralScore,
     text: s.text,
     audioUrl: publicUrl(s.audioKey),
     durationSec: s.durationSec,

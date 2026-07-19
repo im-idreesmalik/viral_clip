@@ -12,6 +12,7 @@ interface AdminStoryDTO {
   language: string;
   source: string;
   status: string;
+  viralScore: number | null;
   text: string;
   audioUrl: string | null;
   durationSec: number | null;
@@ -24,13 +25,24 @@ interface AdminStoryDTO {
   errorMessage: string | null;
 }
 
-const STATUS_BADGE: Record<string, string> = {
-  DRAFT: "badge-neutral",
-  GENERATING: "badge-warn",
-  READY: "badge-success",
-  CLAIMED: "badge-brand",
-  FAILED: "badge-danger",
+// Friendly, plain-language status for each pipeline stage.
+const STATUS_META: Record<string, { label: string; badge: string; active?: boolean }> = {
+  DRAFT: { label: "Draft", badge: "badge-neutral" },
+  QUEUED: { label: "In queue", badge: "badge-neutral", active: true },
+  WRITING: { label: "Writing story…", badge: "badge-warn", active: true },
+  NARRATING: { label: "Generating voice-over…", badge: "badge-warn", active: true },
+  GENERATING: { label: "Processing…", badge: "badge-warn", active: true },
+  READY: { label: "Ready", badge: "badge-success" },
+  CLAIMED: { label: "Claimed", badge: "badge-brand" },
+  FAILED: { label: "Failed", badge: "badge-danger" },
 };
+const ACTIVE_STATUSES = new Set(["QUEUED", "WRITING", "NARRATING", "GENERATING"]);
+function statusMeta(s: string) {
+  return STATUS_META[s] ?? { label: s, badge: "badge-neutral" };
+}
+function viralBadgeClass(score: number): string {
+  return score >= 80 ? "badge-success" : score >= 60 ? "badge-warn" : "badge-neutral";
+}
 
 type Mode = "ai" | "paste" | "upload";
 
@@ -55,12 +67,19 @@ export function AdminStories() {
     load();
   }, [load]);
 
-  // Poll while anything is still generating so status/duration update live.
+  // Poll while anything is still in progress so status/duration update live.
   useEffect(() => {
-    if (!stories.some((s) => s.status === "GENERATING")) return;
-    const t = setInterval(load, 5000);
+    if (!stories.some((s) => ACTIVE_STATUSES.has(s.status))) return;
+    const t = setInterval(load, 4000);
     return () => clearInterval(t);
   }, [stories, load]);
+
+  const counts = {
+    queued: stories.filter((s) => s.status === "QUEUED").length,
+    writing: stories.filter((s) => s.status === "WRITING").length,
+    narrating: stories.filter((s) => s.status === "NARRATING" || s.status === "GENERATING").length,
+  };
+  const anyActive = counts.queued + counts.writing + counts.narrating > 0;
 
   async function regenerate(id: string) {
     try {
@@ -115,7 +134,20 @@ export function AdminStories() {
       </div>
 
       {/* List */}
-      <h2 className="mb-3 mt-8 text-lg font-semibold">All stories ({stories.length})</h2>
+      <h2 className="mb-1 mt-8 text-lg font-semibold">All stories ({stories.length})</h2>
+      {anyActive ? (
+        <p className="mb-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-ink-400">
+          <span className="inline-flex items-center gap-1.5 font-medium text-ink-300">
+            <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-brand-500" />
+            Working now
+          </span>
+          {counts.writing > 0 && <span>✍️ {counts.writing} writing text</span>}
+          {counts.narrating > 0 && <span>🎙️ {counts.narrating} generating voice-over</span>}
+          {counts.queued > 0 && <span>⏳ {counts.queued} in queue</span>}
+        </p>
+      ) : (
+        <div className="mb-3" />
+      )}
       {loading ? (
         <div className="space-y-2">
           {[0, 1, 2].map((i) => (
@@ -130,8 +162,9 @@ export function AdminStories() {
             <div key={s.id} className="card p-4">
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-2">
-                    <span className={`badge ${STATUS_BADGE[s.status] ?? "badge-neutral"}`}>{s.status}</span>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <StatusBadge status={s.status} />
+                    {s.viralScore != null && <ViralBadge score={s.viralScore} />}
                     <span className="badge badge-neutral">{languageLabel(s.language)}</span>
                     <span className="text-xs text-ink-400">{s.source}</span>
                     {s.durationSec ? (
@@ -159,7 +192,7 @@ export function AdminStories() {
                   <IconBtn
                     icon="graphic_eq"
                     label="Regenerate voice-over"
-                    disabled={s.status === "GENERATING" || !s.text}
+                    disabled={ACTIVE_STATUSES.has(s.status) || !s.text}
                     onClick={() => regenerate(s.id)}
                   />
                   <IconBtn icon="delete" label="Delete" danger onClick={() => remove(s.id, s.title)} />
@@ -464,6 +497,24 @@ function EditDialog({
 }
 
 // ---- Small shared bits ----------------------------------------------------
+
+function StatusBadge({ status }: { status: string }) {
+  const m = statusMeta(status);
+  return (
+    <span className={`badge ${m.badge}`}>
+      {m.active && <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-current" />}
+      {m.label}
+    </span>
+  );
+}
+
+function ViralBadge({ score }: { score: number }) {
+  return (
+    <span className={`badge ${viralBadgeClass(score)}`} title="AI estimate of viral potential">
+      🔥 {score}
+    </span>
+  );
+}
 
 function TabButton({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) {
   return (

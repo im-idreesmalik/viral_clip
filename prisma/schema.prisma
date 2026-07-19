@@ -68,7 +68,10 @@ enum FootageMode {
 // Lifecycle of an AI Story (long-form narrated story users can turn into clips).
 enum StoryStatus {
   DRAFT // text saved, no voice-over yet
-  GENERATING // AI writing the text and/or synthesizing the voice-over
+  QUEUED // created, waiting in the queue for the worker to start
+  WRITING // AI is writing the story text
+  NARRATING // synthesizing the voice-over
+  GENERATING // legacy catch-all "processing" (older rows / in-flight jobs)
   READY // text + voice-over ready; listenable + claimable
   CLAIMED // a user generated a video from it; hidden from the public library
   FAILED
@@ -313,6 +316,9 @@ model Story {
   language String      @default("en") // "en" | "ur" (spoken/display language)
   source   StorySource @default(AI)
   status   StoryStatus @default(DRAFT)
+
+  // AI's honest 0-100 estimate of how viral/engaging the story is (AI stories).
+  viralScore Int?
 
   // The narrated text. `text` is the display script (Urdu in Arabic script for
   // Urdu stories); `ttsText` is the exact string fed to the voice engine — for

@@ -25,10 +25,9 @@ export async function processStoryGeneration(storyId: string, durationMin: numbe
   if (!story) throw new Error(`Story ${storyId} not found`);
 
   try {
-    await prisma.story.update({ where: { id: storyId }, data: { status: StoryStatus.GENERATING, errorMessage: null } });
-
     // 1. Write the text (only for AI stories that don't have it yet).
     if (story.source === StorySource.AI && !story.text?.trim()) {
+      await prisma.story.update({ where: { id: storyId }, data: { status: StoryStatus.WRITING, errorMessage: null } });
       const language = (story.language === "ur" ? "ur" : "en") as StoryLanguage;
       const generated = await generateStory({
         topic: story.topic || story.title,
@@ -37,13 +36,14 @@ export async function processStoryGeneration(storyId: string, durationMin: numbe
       });
       await prisma.story.update({
         where: { id: storyId },
-        data: { title: generated.title, text: generated.text, ttsText: generated.ttsText },
+        data: { title: generated.title, text: generated.text, ttsText: generated.ttsText, viralScore: generated.viralScore },
       });
       story.text = generated.text;
       story.ttsText = generated.ttsText;
     }
 
     // 2. Synthesize the voice-over.
+    await prisma.story.update({ where: { id: storyId }, data: { status: StoryStatus.NARRATING, errorMessage: null } });
     await synthesizeAndStore(storyId);
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
@@ -56,7 +56,7 @@ export async function processStoryGeneration(storyId: string, durationMin: numbe
 /** (Re)synthesize the voice-over for a story whose text already exists. */
 export async function generateStoryAudio(storyId: string): Promise<void> {
   try {
-    await prisma.story.update({ where: { id: storyId }, data: { status: StoryStatus.GENERATING, errorMessage: null } });
+    await prisma.story.update({ where: { id: storyId }, data: { status: StoryStatus.NARRATING, errorMessage: null } });
     await synthesizeAndStore(storyId);
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);

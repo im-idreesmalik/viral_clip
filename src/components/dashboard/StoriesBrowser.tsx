@@ -12,6 +12,7 @@ export interface StoryDTO {
   language: string;
   source: string;
   status: string;
+  viralScore: number | null;
   text: string;
   audioUrl: string | null;
   durationSec: number | null;
@@ -119,7 +120,19 @@ function StoryCard({ story, onGenerate }: { story: StoryDTO; onGenerate: () => v
         <h3 className="min-w-0 font-semibold leading-snug" dir={rtl ? "rtl" : "ltr"}>
           {story.title}
         </h3>
-        <span className="badge badge-neutral shrink-0">{languageLabel(story.language)}</span>
+        <div className="flex shrink-0 items-center gap-1.5">
+          {story.viralScore != null && (
+            <span
+              className={`badge ${
+                story.viralScore >= 80 ? "badge-success" : story.viralScore >= 60 ? "badge-warn" : "badge-neutral"
+              }`}
+              title="AI viral-potential score"
+            >
+              🔥 {story.viralScore}
+            </span>
+          )}
+          <span className="badge badge-neutral">{languageLabel(story.language)}</span>
+        </div>
       </div>
       <div className="mt-1 text-xs text-ink-400">{formatDuration(story.durationSec)} listen</div>
 

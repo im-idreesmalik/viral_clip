@@ -1,0 +1,91 @@
+2026-07-17T20:12:10.369Z INFO  [worker] Workers started { queues: [ 'video-processing', 'publishing', 'stories' ] }
+2026-07-17T20:12:11.376Z INFO  [tts] Loading Kokoro TTS (first use downloads it) { model: 'onnx-community/Kokoro-82M-v1.0-ONNX' }
+2026-07-17T20:13:17.133Z INFO  [tts] TTS progress { done: 10, total: 47 }
+2026-07-17T20:14:27.623Z INFO  [tts] TTS progress { done: 20, total: 47 }
+2026-07-17T20:15:40.621Z INFO  [tts] TTS progress { done: 30, total: 47 }
+2026-07-17T20:16:54.730Z INFO  [tts] TTS progress { done: 40, total: 47 }
+2026-07-17T20:18:03.377Z INFO  [tts] Synthesized voice-over { engine: 'kokoro:af_heart', chunks: 47, durationSec: 548 }
+2026-07-17T20:18:03.385Z INFO  [story:pipeline] Story ready { storyId: 'cmrp8au300004x3985rkso9w7', durationSec: 548 }
+2026-07-17T20:18:03.437Z INFO  [worker:story] Story job completed { id: '35', name: 'story-audio' }
+2026-07-17T20:19:05.572Z INFO  [tts] TTS progress { done: 10, total: 59 }
+2026-07-17T20:20:41.702Z INFO  [tts] TTS progress { done: 20, total: 59 }
+2026-07-17T20:22:11.000Z INFO  [tts] TTS progress { done: 30, total: 59 }
+2026-07-17T20:24:59.795Z INFO  [tts] TTS progress { done: 40, total: 59 }
+2026-07-17T23:15:55.689Z INFO  [tts] TTS progress { done: 50, total: 59 }
+prisma:error 
+Invalid `prisma.video.updateMany()` invocation in
+E:\Social Media Video\src\workers\index.ts:42:39
+
+  39 async function reapStuckJobs() {
+  40   const cutoff = new Date(Date.now() - env.staleJobMs);
+  41   try {
+→ 42     const videos = await prisma.video.updateMany(
+Can't reach database server at `localhost:5432`
+
+Please make sure your database server is running at `localhost:5432`.
+prisma:error 
+Invalid `prisma.autoPublishConfig.findMany()` invocation in
+E:\Social Media Video\src\workers\scheduler.ts:25:53
+
+  22 ];
+  23 
+  24 export async function runScheduler(now = new Date()): Promise<void> {
+→ 25   const dueConfigs = await prisma.autoPublishConfig.findMany(
+Can't reach database server at `localhost:5432`
+
+Please make sure your database server is running at `localhost:5432`.
+prisma:error 
+Invalid `prisma.autoPublishConfig.findMany()` invocation in
+E:\Social Media Video\src\workers\scheduler.ts:25:53
+
+  22 ];
+  23 
+  24 export async function runScheduler(now = new Date()): Promise<void> {
+→ 25   const dueConfigs = await prisma.autoPublishConfig.findMany(
+Can't reach database server at `localhost:5432`
+
+Please make sure your database server is running at `localhost:5432`.
+prisma:error 
+Invalid `prisma.publication.findMany()` invocation in
+E:\Social Media Video\src\workers\index.ts:70:44
+
+  67 async function autoRetryStuckPublications() {
+  68   const cutoff = new Date(Date.now() - env.publishAutoRetryAfterMs);
+  69   try {
+→ 70     const stuck = await prisma.publication.findMany(
+Can't reach database server at `localhost:5432`
+
+Please make sure your database server is running at `localhost:5432`.
+prisma:error 
+Invalid `prisma.video.updateMany()` invocation in
+E:\Social Media Video\src\workers\index.ts:42:39
+
+  39 async function reapStuckJobs() {
+  40   const cutoff = new Date(Date.now() - env.staleJobMs);
+  41   try {
+→ 42     const videos = await prisma.video.updateMany(
+Can't reach database server at `localhost:5432`
+
+Please make sure your database server is running at `localhost:5432`.
+prisma:error 
+Invalid `prisma.video.updateMany()` invocation in
+E:\Social Media Video\src\workers\index.ts:42:39
+
+  39 async function reapStuckJobs() {
+  40   const cutoff = new Date(Date.now() - env.staleJobMs);
+  41   try {
+→ 42     const videos = await prisma.video.updateMany(
+Can't reach database server at `localhost:5432`
+
+Please make sure your database server is running at `localhost:5432`.
+prisma:error 
+Invalid `prisma.publication.findMany()` invocation in
+E:\Social Media Video\src\workers\index.ts:70:44
+
+  67 async function autoRetryStuckPublications() {
+  68   const cutoff = new Date(Date.now() - env.publishAutoRetryAfterMs);
+  69   try {
+→ 70     const stuck = await prisma.publication.findMany(
+Can't reach database server at `localhost:5432`
+
+Please make sure your database server is running at `localhost:5432`.

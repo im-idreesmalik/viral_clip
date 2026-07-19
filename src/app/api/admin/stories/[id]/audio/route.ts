@@ -13,7 +13,7 @@ export const POST = handler(async (_req, ctx: Ctx) => {
   if (!story) throw new ApiError(404, "Story not found");
   if (!story.text?.trim()) throw new ApiError(400, "Story has no text to narrate yet.");
 
-  await prisma.story.update({ where: { id }, data: { status: StoryStatus.GENERATING, errorMessage: null } });
+  await prisma.story.update({ where: { id }, data: { status: StoryStatus.QUEUED, errorMessage: null } });
   await enqueueStoryAudio(id);
   return ok({ success: true });
 });
