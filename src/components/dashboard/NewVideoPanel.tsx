@@ -5,6 +5,7 @@ import { api } from "@/lib/client";
 import type { ClipMode } from "@/lib/types";
 import { LANGUAGES } from "@/lib/languages";
 import { CAPTION_STYLE_OPTIONS } from "@/lib/caption-styles";
+import { CaptionPreview } from "@/components/dashboard/CaptionPreview";
 import { useToast } from "@/components/ui/Toast";
 
 export function NewVideoPanel({ onCreated }: { onCreated: () => void }) {
@@ -251,6 +252,7 @@ export function NewVideoPanel({ onCreated }: { onCreated: () => void }) {
               ))}
             </select>
           </div>
+          <CaptionPreview style={captionStyle} language={language} />
         </>
       )}
 

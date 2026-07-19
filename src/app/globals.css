@@ -189,3 +189,28 @@ body {
   background: linear-gradient(90deg, #7c5cff 0%, #22d3ee 100%);
   animation: nav-progress 1s ease-in-out infinite;
 }
+
+/* Subtitle-style "pop" preview: scale + fade in, hold, then loop. */
+@keyframes caption-pop {
+  0% {
+    transform: scale(0.55);
+    opacity: 0;
+  }
+  16% {
+    transform: scale(1.08);
+    opacity: 1;
+  }
+  28% {
+    transform: scale(1);
+  }
+  92% {
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+.animate-caption-pop {
+  animation: caption-pop 2.4s ease-in-out infinite;
+}

@@ -5,6 +5,7 @@ import { api } from "@/lib/client";
 import type { VideoDTO, ClipMode } from "@/lib/types";
 import { LANGUAGES } from "@/lib/languages";
 import { CAPTION_STYLE_OPTIONS } from "@/lib/caption-styles";
+import { CaptionPreview } from "@/components/dashboard/CaptionPreview";
 import { useToast } from "@/components/ui/Toast";
 
 /**
@@ -179,6 +180,7 @@ export function ReprocessDialog({
                 ))}
               </select>
             </div>
+            <CaptionPreview style={captionStyle} language={language} />
           </>
         )}
 
