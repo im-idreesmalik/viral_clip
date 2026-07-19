@@ -46,3 +46,7 @@ yarn-error.log*
 .vscode/*
 !.vscode/extensions.json
 *.tsbuildinfo
+
+# Worker log files
+worker.out.log
+worker.err.log
