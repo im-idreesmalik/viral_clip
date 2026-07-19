@@ -286,7 +286,6 @@ function PasteForm({ onCreated }: { onCreated: () => void }) {
   const [title, setTitle] = useState("");
   const [language, setLanguage] = useState("en");
   const [text, setText] = useState("");
-  const [ttsText, setTtsText] = useState("");
   const [busy, setBusy] = useState(false);
   const toast = useToast();
 
@@ -296,18 +295,11 @@ function PasteForm({ onCreated }: { onCreated: () => void }) {
     try {
       await api("/api/admin/stories", {
         method: "POST",
-        body: JSON.stringify({
-          mode: "paste",
-          title: title.trim(),
-          language,
-          text: text.trim(),
-          ttsText: ttsText.trim() || undefined,
-        }),
+        body: JSON.stringify({ mode: "paste", title: title.trim(), language, text: text.trim() }),
       });
       toast.success("Generating the voice-over…");
       setTitle("");
       setText("");
-      setTtsText("");
       onCreated();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed");
@@ -341,17 +333,6 @@ function PasteForm({ onCreated }: { onCreated: () => void }) {
           placeholder="Paste the full story…"
         />
       </div>
-      {language === "ur" && (
-        <div>
-          <label className="label">Devanagari for voice-over (optional)</label>
-          <textarea
-            className="input min-h-20"
-            value={ttsText}
-            onChange={(e) => setTtsText(e.target.value)}
-            placeholder="Leave blank to auto-transliterate the Urdu for the voice engine."
-          />
-        </div>
-      )}
       <button className="btn-primary w-full" onClick={submit} disabled={busy}>
         {busy ? "Starting…" : "Save + generate voice-over"}
       </button>
@@ -438,7 +419,6 @@ function EditDialog({
 }) {
   const [title, setTitle] = useState(story.title);
   const [text, setText] = useState(story.text);
-  const [ttsText, setTtsText] = useState(story.ttsText ?? "");
   const [busy, setBusy] = useState(false);
   const toast = useToast();
 
@@ -447,7 +427,7 @@ function EditDialog({
     try {
       await api(`/api/admin/stories/${story.id}`, {
         method: "PATCH",
-        body: JSON.stringify({ title: title.trim(), text: text.trim(), ttsText: ttsText.trim() }),
+        body: JSON.stringify({ title: title.trim(), text: text.trim() }),
       });
       if (regenerate) await api(`/api/admin/stories/${story.id}/audio`, { method: "POST" });
       toast.success(regenerate ? "Saved — regenerating voice-over…" : "Saved");
@@ -473,12 +453,6 @@ function EditDialog({
             <label className="label">Story text</label>
             <textarea className="input min-h-48" value={text} onChange={(e) => setText(e.target.value)} dir={rtl ? "rtl" : "ltr"} />
           </div>
-          {rtl && (
-            <div>
-              <label className="label">Devanagari for voice-over (optional)</label>
-              <textarea className="input min-h-24" value={ttsText} onChange={(e) => setTtsText(e.target.value)} />
-            </div>
-          )}
         </div>
         <div className="mt-6 flex flex-wrap gap-2">
           <button className="btn-primary flex-1" onClick={() => save(true)} disabled={busy}>

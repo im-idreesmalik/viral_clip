@@ -26,7 +26,6 @@ const pasteSchema = z.object({
   title: z.string().trim().min(1).max(160),
   text: z.string().trim().min(20),
   language: z.enum(["en", "ur"]),
-  ttsText: z.string().trim().optional(),
 });
 const createSchema = z.discriminatedUnion("mode", [aiSchema, pasteSchema]);
 
@@ -56,9 +55,8 @@ export const POST = handler(async (req) => {
       title: body.title,
       language: body.language,
       source: StorySource.MANUAL,
-      status: StoryStatus.GENERATING,
+      status: StoryStatus.QUEUED,
       text: body.text,
-      ttsText: body.ttsText || null,
     },
   });
   await enqueueStoryAudio(story.id);

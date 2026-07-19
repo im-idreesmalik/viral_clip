@@ -42,9 +42,16 @@ function clampScore(n: number | null | undefined): number {
 // Roughly how many words a listener hears per minute at a calm narration pace.
 const WORDS_PER_MIN = 145;
 
+/** Use the cloud model only when it's explicitly the selected provider AND a
+ *  key is set — otherwise the local Ollama (reliable, offline, free). This keeps
+ *  story generation working when the cloud API is unreachable. */
+function useCloud(): boolean {
+  return env.aiProvider === "anthropic" && !!env.anthropicApiKey;
+}
+
 export async function generateStory(opts: GenerateStoryOptions): Promise<GeneratedStory> {
   const targetWords = Math.round(opts.durationMin * WORDS_PER_MIN);
-  return env.anthropicApiKey
+  return useCloud()
     ? generateStoryAnthropic(opts, targetWords)
     : generateStoryOllama(opts, targetWords);
 }
@@ -225,7 +232,7 @@ export async function scoreStoryText(title: string, text: string): Promise<numbe
     "Respond with ONLY the number — no words, no punctuation.",
   ].join("\n");
   const user = `Title: ${title}\n\nStory:\n${text.slice(0, 6000)}`;
-  const raw = env.anthropicApiKey ? await runAnthropicText(system, user) : await runOllamaChat(system, user, 0.3);
+  const raw = useCloud() ? await runAnthropicText(system, user) : await runOllamaChat(system, user, 0.3);
   const m = raw.match(/\d{1,3}/);
   return clampScore(m ? Number(m[0]) : 75);
 }

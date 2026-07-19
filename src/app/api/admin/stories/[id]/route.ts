@@ -9,7 +9,6 @@ type Ctx = { params: Promise<{ id: string }> };
 const patchSchema = z.object({
   title: z.string().trim().min(1).max(160).optional(),
   text: z.string().trim().min(1).optional(),
-  ttsText: z.string().trim().optional(),
   topic: z.string().trim().max(500).optional(),
   language: z.enum(["en", "ur"]).optional(),
 });
@@ -29,7 +28,6 @@ export const PATCH = handler(async (req, ctx: Ctx) => {
     data: {
       title: body.title ?? undefined,
       text: body.text ?? undefined,
-      ttsText: body.ttsText === undefined ? undefined : body.ttsText || null,
       topic: body.topic === undefined ? undefined : body.topic || null,
       language: body.language ?? undefined,
     },
