@@ -39,19 +39,34 @@ const PROCESSING_STATUSES: VideoStatus[] = [
 async function reapStuckJobs() {
   const cutoff = new Date(Date.now() - env.staleJobMs);
   try {
-    const videos = await prisma.video.updateMany({
+    // A video is only "stalled" if it hasn't advanced AND none of its clips have
+    // progressed within the window. A big multi-clip render can run past the
+    // threshold while actively progressing — don't false-fail those.
+    const candidates = await prisma.video.findMany({
       where: { status: { in: PROCESSING_STATUSES }, updatedAt: { lt: cutoff } },
-      data: {
-        status: VideoStatus.FAILED,
-        errorMessage: "Processing stalled and was terminated to protect the system. Please retry.",
+      select: {
+        id: true,
+        clips: { where: { updatedAt: { gte: cutoff } }, select: { id: true }, take: 1 },
       },
     });
+    const stalledIds = candidates.filter((v) => v.clips.length === 0).map((v) => v.id);
+    let videoCount = 0;
+    if (stalledIds.length) {
+      const res = await prisma.video.updateMany({
+        where: { id: { in: stalledIds } },
+        data: {
+          status: VideoStatus.FAILED,
+          errorMessage: "Processing stalled and was terminated to protect the system. Please retry.",
+        },
+      });
+      videoCount = res.count;
+    }
     const clips = await prisma.clip.updateMany({
       where: { status: ClipStatus.RENDERING, updatedAt: { lt: cutoff } },
       data: { status: ClipStatus.FAILED, errorMessage: "Render stalled and was terminated." },
     });
-    if (videos.count || clips.count) {
-      log.warn("Reaped stuck jobs", { videos: videos.count, clips: clips.count });
+    if (videoCount || clips.count) {
+      log.warn("Reaped stuck jobs", { videos: videoCount, clips: clips.count });
     }
   } catch (err) {
     log.error("Reaper failed", { message: err instanceof Error ? err.message : String(err) });

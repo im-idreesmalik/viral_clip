@@ -83,36 +83,56 @@ export async function processVideo(videoId: string): Promise<void> {
       }
     }
 
-    // 3. Determine clips.
-    await setStatus(videoId, VideoStatus.ANALYZING);
-    const detected = await selectClips(video.clipMode, {
-      durationSec: meta.durationSec,
-      transcript,
-      threshold: video.viralThreshold,
-      segmentSeconds: video.segmentSeconds,
-      maxClips: video.targetClipCount,
-    });
-
-    if (detected.length === 0) {
-      throw new Error("No clips could be generated from this video.");
+    // 3. Determine clips. If this video already has clips (a retry after an
+    //    interruption), RESUME: keep the ones already rendered and finish only
+    //    the rest, instead of re-detecting and duplicating work. A fresh
+    //    reprocess deletes the old clips first, so it falls into the else branch.
+    const existing = await prisma.clip.findMany({ where: { videoId }, select: { id: true, status: true } });
+    let clipsToRender: { id: string }[];
+    if (existing.length > 0) {
+      const unfinished = existing.filter((c) => c.status !== ClipStatus.READY);
+      if (unfinished.length === 0) {
+        await setStatus(videoId, VideoStatus.READY);
+        log.info("Video already complete on resume", { videoId, clips: existing.length });
+        return;
+      }
+      // Reset half-rendered / failed clips and finish everything not yet ready.
+      await prisma.clip.updateMany({
+        where: { id: { in: unfinished.map((c) => c.id) } },
+        data: { status: ClipStatus.PENDING, errorMessage: null },
+      });
+      clipsToRender = unfinished.map((c) => ({ id: c.id }));
+      log.info("Resuming render", { videoId, remaining: unfinished.length, alreadyReady: existing.length - unfinished.length });
+    } else {
+      await setStatus(videoId, VideoStatus.ANALYZING);
+      const detected = await selectClips(video.clipMode, {
+        durationSec: meta.durationSec,
+        transcript,
+        threshold: video.viralThreshold,
+        segmentSeconds: video.segmentSeconds,
+        maxClips: video.targetClipCount,
+      });
+      if (detected.length === 0) {
+        throw new Error("No clips could be generated from this video.");
+      }
+      const created = await prisma.$transaction(
+        detected.map((c) =>
+          prisma.clip.create({
+            data: {
+              videoId,
+              title: c.title,
+              startSec: c.startSec,
+              endSec: c.endSec,
+              viralScore: c.viralScore,
+              reason: c.reason,
+              order: c.order,
+              status: ClipStatus.PENDING,
+            },
+          }),
+        ),
+      );
+      clipsToRender = created.map((c) => ({ id: c.id }));
     }
-
-    const createdClips = await prisma.$transaction(
-      detected.map((c) =>
-        prisma.clip.create({
-          data: {
-            videoId,
-            title: c.title,
-            startSec: c.startSec,
-            endSec: c.endSec,
-            viralScore: c.viralScore,
-            reason: c.reason,
-            order: c.order,
-            status: ClipStatus.PENDING,
-          },
-        }),
-      ),
-    );
 
     // 4. Render clips — a few at a time so the CPU filters and the GPU encoder
     //    work in parallel instead of one clip blocking the next.
@@ -124,8 +144,8 @@ export async function processVideo(videoId: string): Promise<void> {
       1,
       isGpu ? Math.min(env.clipRenderConcurrency, env.gpuRenderConcurrencyCap) : env.clipRenderConcurrency,
     );
-    for (let i = 0; i < createdClips.length; i += concurrency) {
-      const batch = createdClips.slice(i, i + concurrency);
+    for (let i = 0; i < clipsToRender.length; i += concurrency) {
+      const batch = clipsToRender.slice(i, i + concurrency);
       await Promise.all(
         batch.map((clip) =>
           renderClipRecord(clip.id).catch((err) => {
