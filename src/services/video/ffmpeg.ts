@@ -176,10 +176,17 @@ export interface RenderClipOptions {
   genericInputs?: string[];
   /** Small "@handle" burned bottom-center (smaller than the part label). */
   watermark?: string;
+  /** Optional background-music file mixed (ducked) under the original audio. */
+  backgroundMusicPath?: string;
   /** Convert to vertical 9:16 with a blurred background fill. Default true. */
   vertical?: boolean;
   onProgress?: (percent: number) => void;
 }
+
+// Background-music mix levels. Ducked under the voice so it's a present-but-
+// subtle bed (~13 dB down); a touch louder when the clip has no speech.
+const MUSIC_VOLUME = 0.22;
+const MUSIC_VOLUME_SOLO = 0.5;
 
 /**
  * Build the video filter chain that fits arbitrary input into a 1080x1920
@@ -322,8 +329,9 @@ function applyEncoder(command: ReturnType<typeof ffmpeg>, encoder: string) {
 }
 
 export async function renderClip(opts: RenderClipOptions): Promise<void> {
-  const { input, output, startSec, endSec, subtitlePath, subtitleFontsDir, partLabel, topLabel, genericInputs, watermark, vertical = true, onProgress } = opts;
+  const { input, output, startSec, endSec, subtitlePath, subtitleFontsDir, partLabel, topLabel, genericInputs, watermark, backgroundMusicPath, vertical = true, onProgress } = opts;
   const duration = Math.max(0.1, endSec - startSec);
+  const music = backgroundMusicPath && fs.existsSync(backgroundMusicPath) ? backgroundMusicPath : null;
 
   // Detect streams up front: we only build the audio chain when there's a
   // stream to normalize, and we only use the source's own video when it has one
@@ -366,6 +374,14 @@ export async function renderClip(opts: RenderClipOptions): Promise<void> {
           .inputOptions(["-f", "lavfi"]);
       }
 
+      // Background music: looped so it always covers the clip length. Added after
+      // any generic/synthetic inputs so its stream index is predictable.
+      let musicIndex = -1;
+      if (music) {
+        command.input(music).inputOptions(["-stream_loop", "-1"]);
+        musicIndex = 1 + (generic ? generic.length : syntheticBg ? 1 : 0);
+      }
+
       if (vertical) {
         let filter: string;
         if (overlayInputs) {
@@ -385,9 +401,16 @@ export async function renderClip(opts: RenderClipOptions): Promise<void> {
           filter = buildVerticalFilter({ subtitlePath, subtitleFontsDir, partLabel: titleLabel, topLabel: topTitle, watermark: wmLabel });
         }
         // Audio always comes from the original (input 0), even in GENERIC mode.
+        // Optionally mix a ducked background-music bed underneath.
         const maps = ["-map", "[v]"];
-        if (hasAudio) {
+        if (hasAudio && music) {
+          filter += `;[0:a]${LOUDNORM}[voice];[${musicIndex}:a]volume=${MUSIC_VOLUME},afade=t=in:d=1.2[bed];[voice][bed]amix=inputs=2:duration=first:dropout_transition=0:normalize=0[aout]`;
+          maps.push("-map", "[aout]");
+        } else if (hasAudio) {
           filter += `;[0:a]${LOUDNORM}[aout]`;
+          maps.push("-map", "[aout]");
+        } else if (music) {
+          filter += `;[${musicIndex}:a]volume=${MUSIC_VOLUME_SOLO},afade=t=in:d=1.2[aout]`;
           maps.push("-map", "[aout]");
         }
         command.complexFilter(filter);

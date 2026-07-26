@@ -292,6 +292,17 @@ export async function renderClipRecord(clipId: string): Promise<void> {
     // Per-user @handle watermark, burned small at the bottom-center.
     const watermark = clip.video.user.handle ? `@${clip.video.user.handle}` : undefined;
 
+    // Per-user background music: mixed (ducked) under the clip audio for a
+    // unique sonic signature, when the user has selected a track and enabled it.
+    let backgroundMusicPath: string | undefined;
+    if (clip.video.user.backgroundMusicEnabled && clip.video.user.backgroundMusicId) {
+      const track = await prisma.backgroundMusic.findUnique({
+        where: { id: clip.video.user.backgroundMusicId },
+        select: { storageKey: true },
+      });
+      if (track?.storageKey) backgroundMusicPath = resolveKey(track.storageKey);
+    }
+
     await renderClip({
       input: sourcePath,
       output: resolveKey(clipKey),
@@ -307,6 +318,7 @@ export async function renderClipRecord(clipId: string): Promise<void> {
           : undefined,
       genericInputs,
       watermark,
+      backgroundMusicPath,
       vertical: true,
     });
 

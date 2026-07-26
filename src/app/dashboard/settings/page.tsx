@@ -12,6 +12,20 @@ const INTERVAL_PRESETS = [
   { label: "Daily", value: 1440 },
 ];
 
+interface MusicTrack {
+  id: string;
+  title: string;
+  mood: string | null;
+  durationSec: number | null;
+  url: string | null;
+  mine: boolean;
+}
+interface MusicState {
+  tracks: MusicTrack[];
+  selectedId: string | null;
+  enabled: boolean;
+}
+
 export default function SettingsPage() {
   const [config, setConfig] = useState<AutoConfigDTO | null>(null);
   const [accounts, setAccounts] = useState<SocialAccountDTO[]>([]);
@@ -28,6 +42,11 @@ export default function SettingsPage() {
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [savingProfile, setSavingProfile] = useState(false);
+  // Background music.
+  const [musicTracks, setMusicTracks] = useState<MusicTrack[]>([]);
+  const [musicSelectedId, setMusicSelectedId] = useState<string | null>(null);
+  const [musicEnabled, setMusicEnabled] = useState(true);
+  const [savingMusic, setSavingMusic] = useState(false);
   const toast = useToast();
 
   useEffect(() => {
@@ -45,7 +64,30 @@ export default function SettingsPage() {
         setEmail(res.user.email ?? "");
       })
       .catch(() => undefined);
+    loadMusic();
   }, []);
+
+  function applyMusicState(res: MusicState) {
+    setMusicTracks(res.tracks);
+    setMusicSelectedId(res.selectedId);
+    setMusicEnabled(res.enabled);
+  }
+
+  function loadMusic() {
+    api<MusicState>("/api/music").then(applyMusicState).catch(() => undefined);
+  }
+
+  async function saveMusic(patch: { musicId?: string | null; enabled?: boolean }) {
+    setSavingMusic(true);
+    try {
+      applyMusicState(await api<MusicState>("/api/music", { method: "PATCH", body: JSON.stringify(patch) }));
+      toast.success("Background music updated");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to update music");
+    } finally {
+      setSavingMusic(false);
+    }
+  }
 
   async function saveProfile() {
     if (newPassword && newPassword !== confirmPassword) {
@@ -262,6 +304,76 @@ export default function SettingsPage() {
             {handleSaved && <span className="text-sm text-emerald-700">✓</span>}
           </div>
         </div>
+      </div>
+
+      {/* Background music */}
+      <div className="card space-y-4 p-6">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <h2 className="text-lg font-semibold">Background music</h2>
+            <p className="text-xs text-ink-100/55">
+              A unique music bed mixed softly under every clip you create. Pick one — it becomes yours and
+              disappears from everyone else&apos;s list.
+            </p>
+          </div>
+          <label className="flex shrink-0 items-center gap-2 text-sm">
+            <input
+              type="checkbox"
+              className="h-5 w-9 accent-brand-500"
+              checked={musicEnabled}
+              disabled={savingMusic}
+              onChange={(e) => saveMusic({ enabled: e.target.checked })}
+            />
+            On
+          </label>
+        </div>
+
+        <div className={`grid gap-2 sm:grid-cols-2 ${musicEnabled ? "" : "pointer-events-none opacity-50"}`}>
+          <button
+            type="button"
+            onClick={() => saveMusic({ musicId: null })}
+            disabled={savingMusic}
+            className={`rounded-lg border p-3 text-left transition-colors ${
+              musicSelectedId === null ? "border-brand-500 bg-brand-500/10" : "border-ink-700 hover:border-ink-600"
+            }`}
+          >
+            <div className="text-sm font-medium">No music</div>
+            <div className="text-xs text-ink-100/55">Keep the original audio only.</div>
+          </button>
+          {musicTracks.map((t) => (
+            <div
+              key={t.id}
+              className={`rounded-lg border p-3 transition-colors ${
+                musicSelectedId === t.id ? "border-brand-500 bg-brand-500/10" : "border-ink-700"
+              }`}
+            >
+              <button
+                type="button"
+                onClick={() => saveMusic({ musicId: t.id })}
+                disabled={savingMusic}
+                className="flex w-full items-center justify-between text-left"
+              >
+                <div>
+                  <div className="text-sm font-medium">{t.title}</div>
+                  <div className="text-xs text-ink-100/55">
+                    {t.mood}
+                    {musicSelectedId === t.id ? " · selected" : ""}
+                  </div>
+                </div>
+                {musicSelectedId === t.id && (
+                  <span className="material-symbols-outlined text-[18px] text-brand-600">check_circle</span>
+                )}
+              </button>
+              {t.url && (
+                // eslint-disable-next-line jsx-a11y/media-has-caption
+                <audio src={t.url} controls preload="none" className="mt-2 h-8 w-full" />
+              )}
+            </div>
+          ))}
+        </div>
+        {musicTracks.length === 0 && (
+          <p className="text-sm text-ink-100/55">No tracks available right now.</p>
+        )}
       </div>
 
       <div>

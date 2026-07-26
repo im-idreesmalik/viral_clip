@@ -97,13 +97,40 @@ model User {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
+  // Per-user background music: the track mixed under this user's clips for a
+  // unique sonic signature. A track is claimed exclusively (see BackgroundMusic).
+  backgroundMusicId      String?
+  backgroundMusicEnabled Boolean @default(true)
+
   videos         Video[]
   socialAccounts SocialAccount[]
   schedule       AutoPublishConfig?
   publications   Publication[]
   claimedStories Story[]
+  claimedMusic   BackgroundMusic[]
 
   @@index([email])
+}
+
+// A background-music track. Generated (or uploaded) into a shared library;
+// each user can claim ONE exclusively so their videos carry a unique bed.
+model BackgroundMusic {
+  id          String  @id @default(cuid())
+  title       String
+  mood        String? // e.g. "Calm", "Warm", "Mystic"
+  source      String  @default("GENERATED") // GENERATED | UPLOAD
+  storageKey  String // path within STORAGE_DIR to the mp3
+  durationSec Float?
+
+  // Exclusive claim: once a user selects it, it's theirs and hidden from others.
+  claimedById String?
+  claimedBy   User?    @relation(fields: [claimedById], references: [id], onDelete: SetNull)
+  claimedAt   DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([claimedById])
 }
 
 model Video {
