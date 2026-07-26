@@ -220,7 +220,8 @@ function GenerateForm({ onDone }: { onDone: () => void }) {
         <label className="label">Music description (prompt)</label>
         <textarea className="input min-h-24" value={prompt} onChange={(e) => setPrompt(e.target.value)} />
         <p className="mt-1 text-xs text-ink-100/50">
-          Instrumental only. Generated locally with MusicGen — takes a few minutes; it appears below when ready.
+          Instrumental only. Generated locally with Stable Audio Open — commercial-safe for creators under
+          $1M/yr revenue. Takes a few minutes; it appears below when ready.
         </p>
       </div>
       <div className="grid grid-cols-6 gap-3">
@@ -238,7 +239,7 @@ function GenerateForm({ onDone }: { onDone: () => void }) {
             className="input"
             type="number"
             min={5}
-            max={30}
+            max={45}
             value={durationSec}
             onChange={(e) => setDurationSec(Number(e.target.value))}
           />

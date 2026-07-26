@@ -43,7 +43,7 @@ export const POST = handler(async (req) => {
     const prompt = String(body.prompt ?? "").trim();
     const title = String(body.title ?? "").trim();
     const mood = String(body.mood ?? "").trim() || null;
-    const durationSec = Math.max(5, Math.min(30, Number(body.durationSec) || 25));
+    const durationSec = Math.max(5, Math.min(45, Number(body.durationSec) || 25));
     if (prompt.length < 10) throw new ApiError(400, "Add a music description prompt.");
     if (!title) throw new ApiError(400, "Add a title.");
     // Pending row (empty storageKey) — the worker fills it in.

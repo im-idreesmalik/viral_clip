@@ -124,10 +124,19 @@ export const env = {
   // is English-only). Point ESPEAK_PATH at the binary if it's not the default.
   espeakPath: process.env.ESPEAK_PATH || "C:/Program Files/eSpeak NG/espeak-ng.exe",
 
-  // Local AI music generation (MusicGen via Python — see scripts/musicgen_generate.py).
+  // Local AI music generation (Python). Two backends:
+  //   stable-audio -> Stable Audio Open (Stability Community License; commercial
+  //                   use OK under $1M revenue). Gated: needs HF_TOKEN. Default.
+  //   musicgen     -> Meta MusicGen (CC-BY-NC; non-commercial only).
+  musicBackend: (process.env.MUSIC_BACKEND || "stable-audio").toLowerCase(),
   musicGenPython: process.env.MUSICGEN_PYTHON || path.resolve("tools/musicgen/venv/Scripts/python.exe"),
   musicGenScript: process.env.MUSICGEN_SCRIPT || path.resolve("scripts/musicgen_generate.py"),
   musicGenModel: process.env.MUSICGEN_MODEL || "facebook/musicgen-small",
+  stableAudioScript: process.env.STABLE_AUDIO_SCRIPT || path.resolve("scripts/stable_audio_generate.py"),
+  stableAudioModel: process.env.STABLE_AUDIO_MODEL || "stabilityai/stable-audio-open-1.0",
+  stableAudioSteps: int(process.env.STABLE_AUDIO_STEPS, 100),
+  // Hugging Face token for gated model downloads (Stable Audio Open). One-time.
+  hfToken: process.env.HF_TOKEN || process.env.HUGGING_FACE_HUB_TOKEN || "",
   musicGenTimeoutMs: int(process.env.MUSICGEN_TIMEOUT_MS, 30 * 60 * 1000),
   // Auto-retry a failed publication in a sequential batch after this long if
   // nobody clicked Retry, so one failure can't stall the rest of the queue.
