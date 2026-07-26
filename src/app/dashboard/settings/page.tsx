@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useState } from "react";
 import { api, PLATFORM_META } from "@/lib/client";
 import type { AutoConfigDTO, SocialAccountDTO, PlatformName } from "@/lib/types";
@@ -47,6 +48,7 @@ export default function SettingsPage() {
   const [musicSelectedId, setMusicSelectedId] = useState<string | null>(null);
   const [musicEnabled, setMusicEnabled] = useState(true);
   const [savingMusic, setSavingMusic] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(false);
   const toast = useToast();
 
   useEffect(() => {
@@ -57,11 +59,12 @@ export default function SettingsPage() {
       setConfig(cfg);
       setAccounts(acc.accounts.filter((a) => a.isActive));
     });
-    api<{ user: { handle: string | null; name: string | null; email: string } }>("/api/auth/me")
+    api<{ user: { handle: string | null; name: string | null; email: string }; isAdmin: boolean }>("/api/auth/me")
       .then((res) => {
         setHandle(res.user.handle ?? "");
         setName(res.user.name ?? "");
         setEmail(res.user.email ?? "");
+        setIsAdmin(!!res.isAdmin);
       })
       .catch(() => undefined);
     loadMusic();
@@ -316,16 +319,24 @@ export default function SettingsPage() {
               disappears from everyone else&apos;s list.
             </p>
           </div>
-          <label className="flex shrink-0 items-center gap-2 text-sm">
-            <input
-              type="checkbox"
-              className="h-5 w-9 accent-brand-500"
-              checked={musicEnabled}
-              disabled={savingMusic}
-              onChange={(e) => saveMusic({ enabled: e.target.checked })}
-            />
-            On
-          </label>
+          <div className="flex shrink-0 items-center gap-3">
+            {isAdmin && (
+              <Link href="/dashboard/admin/music" className="btn-secondary gap-1.5 text-xs">
+                <span className="material-symbols-outlined text-[16px]">library_music</span>
+                Manage
+              </Link>
+            )}
+            <label className="flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                className="h-5 w-9 accent-brand-500"
+                checked={musicEnabled}
+                disabled={savingMusic}
+                onChange={(e) => saveMusic({ enabled: e.target.checked })}
+              />
+              On
+            </label>
+          </div>
         </div>
 
         <div className={`grid gap-2 sm:grid-cols-2 ${musicEnabled ? "" : "pointer-events-none opacity-50"}`}>
