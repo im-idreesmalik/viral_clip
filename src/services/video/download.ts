@@ -108,14 +108,27 @@ async function fetchMetadata(url: string): Promise<FetchMetadata> {
  */
 export async function downloadVideo(url: string, destDir: string): Promise<DownloadResult> {
   await fsp.mkdir(destDir, { recursive: true });
+  // Clear any leftover files from a previous failed attempt so a retry can't
+  // collide with a stale partial of the same name.
+  for (const f of await fsp.readdir(destDir).catch(() => [] as string[])) {
+    if (f.startsWith("source.")) await fsp.rm(path.join(destDir, f), { force: true }).catch(() => undefined);
+  }
   const outputTemplate = path.join(destDir, "source.%(ext)s");
 
   log.info("Downloading source", { url, ffmpegDir: FFMPEG_DIR });
   const args = [
     url,
     "-o", outputTemplate,
-    "-f", "bestvideo[height<=1080][ext=mp4]+bestaudio[ext=m4a]/best[height<=1080]/best",
+    // Prefer H.264 (avc1) — universally compatible and cheap to decode — over
+    // AV1, then fall back to any mp4, then anything.
+    "-f",
+    "bestvideo[height<=1080][ext=mp4][vcodec^=avc1]+bestaudio[ext=m4a]/bestvideo[height<=1080][ext=mp4]+bestaudio[ext=m4a]/best[height<=1080]/best",
     "--merge-output-format", "mp4",
+    // Write straight to the final filename instead of a ".part" that gets
+    // renamed — on Windows that rename is frequently blocked by antivirus
+    // scanning the file (WinError 32), which fails the whole download.
+    "--no-part",
+    "--no-mtime",
     "--no-warnings",
     "--no-progress",
     "--no-playlist",
