@@ -9,6 +9,7 @@ import { env } from "@/lib/env";
 import { createLogger } from "@/lib/logger";
 import { QUEUE_NAMES, type StoryJob } from "@/lib/queue";
 import { processStoryGeneration, generateStoryAudio } from "@/services/story/pipeline";
+import { generateMusicTrack } from "@/services/music/generate";
 
 const log = createLogger("worker:story");
 
@@ -21,6 +22,8 @@ export function startStoryWorker(): Worker<StoryJob> {
         await processStoryGeneration(payload.data.storyId, payload.data.durationMin);
       } else if (payload.kind === "story-audio") {
         await generateStoryAudio(payload.data.storyId);
+      } else if (payload.kind === "generate-music") {
+        await generateMusicTrack(payload.data.musicId, payload.data.prompt, payload.data.durationSec);
       }
     },
     {

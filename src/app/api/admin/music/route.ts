@@ -3,6 +3,7 @@ import { prisma } from "@/lib/db";
 import { handler, ok, created, requireAdmin, ApiError } from "@/lib/api";
 import { writeFile, ensureDirFor, resolveKey, publicUrl } from "@/lib/storage";
 import { probe } from "@/services/video/ffmpeg";
+import { enqueueGenerateMusic } from "@/lib/queue";
 
 const AUDIO_EXT = new Set(["mp3", "wav", "m4a", "ogg", "aac", "flac"]);
 
@@ -20,15 +21,37 @@ export const GET = handler(async () => {
       mood: t.mood,
       source: t.source,
       durationSec: t.durationSec,
-      url: publicUrl(t.storageKey),
+      url: t.storageKey ? publicUrl(t.storageKey) : null,
+      generating: !t.storageKey, // no file yet = AI generation in progress
       claimedBy: t.claimedBy?.name ?? t.claimedBy?.email ?? null,
     })),
   );
 });
 
-// POST /api/admin/music — upload a track into the shared library (multipart).
+// POST /api/admin/music — JSON body => generate a track locally with MusicGen;
+// multipart => upload a ready audio file. Both land in the shared library.
 export const POST = handler(async (req) => {
   await requireAdmin();
+
+  if ((req.headers.get("content-type") || "").includes("application/json")) {
+    const body = (await req.json().catch(() => ({}))) as {
+      prompt?: string;
+      title?: string;
+      mood?: string;
+      durationSec?: number;
+    };
+    const prompt = String(body.prompt ?? "").trim();
+    const title = String(body.title ?? "").trim();
+    const mood = String(body.mood ?? "").trim() || null;
+    const durationSec = Math.max(5, Math.min(30, Number(body.durationSec) || 25));
+    if (prompt.length < 10) throw new ApiError(400, "Add a music description prompt.");
+    if (!title) throw new ApiError(400, "Add a title.");
+    // Pending row (empty storageKey) — the worker fills it in.
+    const row = await prisma.backgroundMusic.create({ data: { title, mood, source: "GENERATED", storageKey: "" } });
+    await enqueueGenerateMusic(row.id, prompt, durationSec);
+    return created({ id: row.id, generating: true });
+  }
+
   const form = await req.formData();
   const file = form.get("file");
   const title = String(form.get("title") ?? "").trim();

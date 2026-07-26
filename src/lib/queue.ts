@@ -43,7 +43,8 @@ export interface PublishJob {
 
 export type StoryJob =
   | { kind: "generate-story"; data: { storyId: string; durationMin: number } }
-  | { kind: "story-audio"; data: { storyId: string } };
+  | { kind: "story-audio"; data: { storyId: string } }
+  | { kind: "generate-music"; data: { musicId: string; prompt: string; durationSec: number } };
 
 // ---- Queue singletons ------------------------------------------------------
 
@@ -114,6 +115,10 @@ export async function enqueueGenerateStory(storyId: string, durationMin: number)
 
 export async function enqueueStoryAudio(storyId: string) {
   return getStoryQueue().add("story-audio", { kind: "story-audio", data: { storyId } });
+}
+
+export async function enqueueGenerateMusic(musicId: string, prompt: string, durationSec: number) {
+  return getStoryQueue().add("generate-music", { kind: "generate-music", data: { musicId, prompt, durationSec } });
 }
 
 export async function enqueuePublish(publicationId: string, delayMs?: number) {

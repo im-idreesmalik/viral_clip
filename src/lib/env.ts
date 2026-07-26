@@ -123,6 +123,12 @@ export const env = {
   // espeak-ng gives Kokoro its Hindi/Urdu phonemes (the bundled JS phonemizer
   // is English-only). Point ESPEAK_PATH at the binary if it's not the default.
   espeakPath: process.env.ESPEAK_PATH || "C:/Program Files/eSpeak NG/espeak-ng.exe",
+
+  // Local AI music generation (MusicGen via Python — see scripts/musicgen_generate.py).
+  musicGenPython: process.env.MUSICGEN_PYTHON || path.resolve("tools/musicgen/venv/Scripts/python.exe"),
+  musicGenScript: process.env.MUSICGEN_SCRIPT || path.resolve("scripts/musicgen_generate.py"),
+  musicGenModel: process.env.MUSICGEN_MODEL || "facebook/musicgen-small",
+  musicGenTimeoutMs: int(process.env.MUSICGEN_TIMEOUT_MS, 30 * 60 * 1000),
   // Auto-retry a failed publication in a sequential batch after this long if
   // nobody clicked Retry, so one failure can't stall the rest of the queue.
   publishAutoRetryAfterMs: int(process.env.PUBLISH_AUTO_RETRY_AFTER_MS, 5 * 60 * 1000),
