@@ -145,9 +145,9 @@ export const env = {
   hfToken: process.env.HF_TOKEN || process.env.HUGGING_FACE_HUB_TOKEN || "",
   musicGenTimeoutMs: int(process.env.MUSICGEN_TIMEOUT_MS, 30 * 60 * 1000),
   // Background-music mix gain (0-1) when it plays UNDER narration — lower = more
-  // subtle bed. ~0.15 sits it well below the voice. Solo gain is used when a clip
-  // has no speech, so the bed can be a bit louder.
-  musicMixVolume: num(process.env.MUSIC_MIX_VOLUME, 0.15),
+  // subtle bed. ~0.08 is a barely-there, engaging undertone well below the voice.
+  // Solo gain is used when a clip has no speech, so the bed can be a bit louder.
+  musicMixVolume: num(process.env.MUSIC_MIX_VOLUME, 0.08),
   musicMixVolumeSolo: num(process.env.MUSIC_MIX_VOLUME_SOLO, 0.45),
   // Auto-retry a failed publication in a sequential batch after this long if
   // nobody clicked Retry, so one failure can't stall the rest of the queue.
