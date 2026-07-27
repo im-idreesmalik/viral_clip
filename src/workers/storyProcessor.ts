@@ -9,7 +9,7 @@ import { env } from "@/lib/env";
 import { createLogger } from "@/lib/logger";
 import { QUEUE_NAMES, type StoryJob } from "@/lib/queue";
 import { processStoryGeneration, generateStoryAudio } from "@/services/story/pipeline";
-import { generateMusicTrack } from "@/services/music/generate";
+import { generateMusicTrack, cleanupFailedMusicRow } from "@/services/music/generate";
 
 const log = createLogger("worker:story");
 
@@ -35,8 +35,14 @@ export function startStoryWorker(): Worker<StoryJob> {
   );
 
   worker.on("completed", (job) => log.info("Story job completed", { id: job.id, name: job.name }));
-  worker.on("failed", (job, err) =>
-    log.error("Story job failed", { id: job?.id, name: job?.name, message: err.message }),
-  );
+  worker.on("failed", (job, err) => {
+    log.error("Story job failed", { id: job?.id, name: job?.name, message: err.message });
+    // Only once every retry is exhausted, drop a music row that never got a file
+    // so it doesn't show "Generating…" forever. (Earlier attempts must keep the
+    // row so a retry can still succeed.)
+    if (job && job.data?.kind === "generate-music" && job.attemptsMade >= (job.opts.attempts ?? 1)) {
+      void cleanupFailedMusicRow(job.data.data.musicId);
+    }
+  });
   return worker;
 }

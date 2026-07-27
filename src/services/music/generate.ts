@@ -18,7 +18,7 @@ import ffmpegStatic from "ffmpeg-static";
 import { env } from "@/lib/env";
 import { prisma } from "@/lib/db";
 import { createLogger } from "@/lib/logger";
-import { resolveKey, ensureDirFor } from "@/lib/storage";
+import { resolveKey, ensureDirFor, deleteKey } from "@/lib/storage";
 import { probe } from "@/services/video/ffmpeg";
 
 const execFileAsync = promisify(execFile);
@@ -63,12 +63,25 @@ export async function generateMusicTrack(musicId: string, prompt: string, durati
     log.info("Music ready", { musicId });
   } catch (err) {
     log.error("Music generation failed", { musicId, message: err instanceof Error ? err.message : String(err) });
-    // Drop the pending row so it doesn't linger as "generating" forever.
-    await prisma.backgroundMusic.delete({ where: { id: musicId } }).catch(() => undefined);
+    // Do NOT delete the row here: BullMQ retries this job, and a deleted row makes
+    // every retry fail with "record not found" (the update below can't target it).
+    // Final-attempt cleanup lives in the worker's failed handler (cleanupFailedMusicRow).
     throw err;
   } finally {
     await fsp.rm(wav, { force: true }).catch(() => undefined);
   }
+}
+
+/**
+ * Remove a still-pending (never-saved) generation row. Called by the worker only
+ * after BullMQ has exhausted all retries, so a permanently-failed generation
+ * doesn't linger as "Generating…" forever. Idempotent: deleteMany won't throw if
+ * the row is already gone or has since been filled in (storageKey no longer "").
+ */
+export async function cleanupFailedMusicRow(musicId: string): Promise<void> {
+  await prisma.backgroundMusic.deleteMany({ where: { id: musicId, storageKey: "" } }).catch(() => undefined);
+  // Also drop any orphan mp3 an attempt may have written before its DB update failed.
+  await deleteKey(`music/${musicId}.mp3`).catch(() => undefined);
 }
 
 /** Encode the raw model wav to mp3, normalizing its (quiet) level to a good bed. */
