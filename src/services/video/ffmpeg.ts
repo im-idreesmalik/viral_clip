@@ -183,10 +183,11 @@ export interface RenderClipOptions {
   onProgress?: (percent: number) => void;
 }
 
-// Background-music mix levels. Ducked under the voice so it's a present-but-
-// subtle bed (~13 dB down); a touch louder when the clip has no speech.
-const MUSIC_VOLUME = 0.22;
-const MUSIC_VOLUME_SOLO = 0.5;
+// Background-music mix levels (env-tunable). Ducked well under the voice so it's
+// a present-but-subtle bed (~16 dB down); a touch louder when the clip has no
+// speech. Adjust MUSIC_MIX_VOLUME / MUSIC_MIX_VOLUME_SOLO in .env to taste.
+const MUSIC_VOLUME = env.musicMixVolume;
+const MUSIC_VOLUME_SOLO = env.musicMixVolumeSolo;
 
 /**
  * Build the video filter chain that fits arbitrary input into a 1080x1920

@@ -30,6 +30,12 @@ function int(value: string | undefined, fallback: number): number {
   return Number.isFinite(n) && n > 0 ? Math.floor(n) : fallback;
 }
 
+/** Parse a non-negative float env var (e.g. an audio gain 0-1), else fallback. */
+function num(value: string | undefined, fallback: number): number {
+  const n = Number(value);
+  return Number.isFinite(n) && n >= 0 ? n : fallback;
+}
+
 const STORAGE_DIR = path.resolve(process.env.STORAGE_DIR || "./storage");
 
 export const env = {
@@ -138,6 +144,11 @@ export const env = {
   // Hugging Face token for gated model downloads (Stable Audio Open). One-time.
   hfToken: process.env.HF_TOKEN || process.env.HUGGING_FACE_HUB_TOKEN || "",
   musicGenTimeoutMs: int(process.env.MUSICGEN_TIMEOUT_MS, 30 * 60 * 1000),
+  // Background-music mix gain (0-1) when it plays UNDER narration — lower = more
+  // subtle bed. ~0.15 sits it well below the voice. Solo gain is used when a clip
+  // has no speech, so the bed can be a bit louder.
+  musicMixVolume: num(process.env.MUSIC_MIX_VOLUME, 0.15),
+  musicMixVolumeSolo: num(process.env.MUSIC_MIX_VOLUME_SOLO, 0.45),
   // Auto-retry a failed publication in a sequential batch after this long if
   // nobody clicked Retry, so one failure can't stall the rest of the queue.
   publishAutoRetryAfterMs: int(process.env.PUBLISH_AUTO_RETRY_AFTER_MS, 5 * 60 * 1000),
