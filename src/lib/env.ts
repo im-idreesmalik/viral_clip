@@ -95,7 +95,8 @@ export const env = {
   //   local        -> local whisper.cpp CLI
   //   openai       -> OpenAI Whisper API (paid)
   //   none         -> skip transcription
-  transcriptionProvider: (process.env.TRANSCRIPTION_PROVIDER || "transformers") as
+  transcriptionProvider: (process.env.TRANSCRIPTION_PROVIDER || "groq") as
+    | "groq"
     | "transformers"
     | "local"
     | "openai"
@@ -109,6 +110,21 @@ export const env = {
   transformersDtype: process.env.TRANSFORMERS_DTYPE || "q8",
   openaiApiKey: process.env.OPENAI_API_KEY || "",
   openaiWhisperModel: process.env.OPENAI_WHISPER_MODEL || "whisper-1",
+  // Groq Speech-to-Text (OpenAI-compatible, ~228x realtime). Default provider.
+  // Key from https://console.groq.com/keys (starts with "gsk_"). NEVER hard-code.
+  groqApiKey: process.env.GROQ_API_KEY || "",
+  groqSttModel: process.env.GROQ_STT_MODEL || "whisper-large-v3-turbo",
+  // Chunk long audio so each request stays under Groq's file limit (25MB free /
+  // 100MB dev). ~25min mono mp3 ≈ 12MB, safely under 25MB. Chunks run concurrently.
+  groqChunkSeconds: int(process.env.GROQ_CHUNK_SECONDS, 25 * 60),
+  // Audio overlap extracted past each chunk boundary so a boundary word is fully
+  // captured; words are then de-duplicated by their start time on merge.
+  groqChunkOverlapSeconds: int(process.env.GROQ_CHUNK_OVERLAP_SECONDS, 8),
+  // Max chunks transcribed in parallel (respect Groq rate limits for your tier).
+  groqConcurrency: int(process.env.GROQ_CONCURRENCY, 4),
+  // Per-chunk retry budget (429 / 5xx / network) with exponential backoff.
+  groqMaxRetries: int(process.env.GROQ_MAX_RETRIES, 5),
+  groqRequestTimeoutMs: int(process.env.GROQ_REQUEST_TIMEOUT_MS, 3 * 60 * 1000),
   whisperCli: process.env.WHISPER_CLI || "",
   whisperModel: process.env.WHISPER_MODEL || "",
   // Language for the local whisper.cpp provider: "auto" detects per-video

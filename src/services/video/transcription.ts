@@ -52,6 +52,7 @@ export async function transcribe(videoPath: string, language?: string): Promise<
     return null;
   }
   try {
+    if (provider === "groq") return await transcribeGroq(videoPath, language);
     if (provider === "transformers") return await transcribeTransformers(videoPath);
     if (provider === "openai") return await transcribeOpenAI(videoPath);
     if (provider === "local") return await transcribeLocal(videoPath, language);
@@ -321,6 +322,197 @@ async function callWhisperApi(audioPath: string): Promise<WhisperApiResponse> {
     throw new Error(`Whisper API error ${res.status}: ${body.slice(0, 300)}`);
   }
   return (await res.json()) as WhisperApiResponse;
+}
+
+// --------------------------------------------------------------------------
+// Groq Speech-to-Text API (OpenAI-compatible; whisper-large-v3-turbo).
+// Extremely fast (~228x realtime) + cheap. Long audio is chunked under Groq's
+// file-size limit, chunks are transcribed concurrently with per-chunk retry,
+// then merged back with offset timestamps + de-dup at chunk boundaries. Output
+// is the SAME internal Transcript shape as every other provider.
+// --------------------------------------------------------------------------
+
+const GROQ_STT_URL = "https://api.groq.com/openai/v1/audio/transcriptions";
+const GROQ_PRICE_PER_HOUR = 0.04; // whisper-large-v3-turbo, USD per audio-hour.
+
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+/** Run `fn` over `items` with at most `limit` in flight; preserves index order. */
+async function mapWithConcurrency<T, R>(
+  items: T[],
+  limit: number,
+  fn: (item: T, index: number) => Promise<R>,
+): Promise<R[]> {
+  const results = new Array<R>(items.length);
+  let next = 0;
+  const worker = async () => {
+    while (next < items.length) {
+      const i = next++;
+      results[i] = await fn(items[i], i);
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker));
+  return results;
+}
+
+interface GroqError extends Error {
+  status?: number;
+  retryable?: boolean;
+  retryAfterMs?: number;
+}
+
+/** One Groq transcription request for a single audio file (a chunk or the whole clip). */
+async function callGroqApi(audioPath: string, language?: string): Promise<WhisperApiResponse & { language?: string }> {
+  const buffer = await fsp.readFile(audioPath);
+  const form = new FormData();
+  form.append("file", new Blob([buffer], { type: "audio/mpeg" }), path.basename(audioPath));
+  form.append("model", env.groqSttModel);
+  form.append("response_format", "verbose_json");
+  form.append("timestamp_granularities[]", "word");
+  form.append("timestamp_granularities[]", "segment");
+  form.append("temperature", "0");
+  // Omit `language` for auto-detection (equivalent to whisper.cpp `-l auto`).
+  if (language) form.append("language", language);
+
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), env.groqRequestTimeoutMs);
+  let res: Response;
+  try {
+    res = await fetch(GROQ_STT_URL, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${env.groqApiKey}` }, // key never logged
+      body: form,
+      signal: ctrl.signal,
+    });
+  } catch (err) {
+    const e = new Error(`Groq request failed: ${(err as Error).message}`) as GroqError;
+    e.retryable = true; // network error / abort (timeout) → retry
+    throw e;
+  } finally {
+    clearTimeout(timer);
+  }
+  if (!res.ok) {
+    const body = await res.text().catch(() => "");
+    const e = new Error(`Groq API error ${res.status}: ${body.slice(0, 200)}`) as GroqError;
+    e.status = res.status;
+    e.retryable = res.status === 429 || res.status >= 500;
+    const ra = res.headers.get("retry-after");
+    if (ra) {
+      const s = Number(ra);
+      if (Number.isFinite(s)) e.retryAfterMs = s * 1000;
+    }
+    throw e;
+  }
+  return (await res.json()) as WhisperApiResponse & { language?: string };
+}
+
+/** callGroqApi with exponential backoff on 429 / 5xx / network — one chunk's failure never restarts the whole video. */
+async function callGroqApiWithRetry(audioPath: string, language?: string) {
+  let lastErr: unknown;
+  for (let attempt = 0; attempt <= env.groqMaxRetries; attempt++) {
+    try {
+      return await callGroqApi(audioPath, language);
+    } catch (err) {
+      lastErr = err;
+      const e = err as GroqError;
+      if (e.retryable === false || attempt === env.groqMaxRetries) break;
+      const backoff = e.retryAfterMs ?? Math.min(30_000, 1000 * 2 ** attempt) + Math.floor(Math.random() * 500);
+      log.warn("Groq chunk failed; retrying", { attempt: attempt + 1, backoffMs: backoff, status: e.status });
+      await sleep(backoff);
+    }
+  }
+  throw lastErr instanceof Error ? lastErr : new Error(String(lastErr));
+}
+
+async function transcribeGroq(videoPath: string, language?: string): Promise<Transcript> {
+  if (!env.groqApiKey) {
+    throw new Error("GROQ_API_KEY is required for the groq transcription provider (get one at https://console.groq.com/keys).");
+  }
+  const started = Date.now();
+  // Per-video language wins; "auto" → omit param so Whisper detects it. "hi-Latn"
+  // (Hinglish) is transcribed as Hindi then romanized, matching the local path.
+  const requested = language || env.whisperLanguage || "auto";
+  const romanize = requested === "hi-Latn";
+  const langParam = romanize ? "hi" : requested === "auto" ? undefined : requested;
+
+  const { durationSec } = await probe(videoPath);
+  const chunkLen = env.groqChunkSeconds;
+  const overlap = env.groqChunkOverlapSeconds;
+  const chunkCount = Math.max(1, Math.ceil(durationSec / chunkLen));
+  const chunks = Array.from({ length: chunkCount }, (_, i) => {
+    const regionStart = i * chunkLen; // this chunk "owns" words starting in [regionStart, regionEnd)
+    const regionEnd = Math.min((i + 1) * chunkLen, durationSec);
+    const isLast = i === chunkCount - 1;
+    // Extract slightly past the boundary (except the last) so a word straddling
+    // the cut is fully transcribed by whichever chunk owns its start.
+    const extractDur = Math.min(chunkLen + (isLast ? 0 : overlap), durationSec - regionStart);
+    return { i, regionStart, regionEnd, extractDur, isLast };
+  });
+
+  const tmpRoot = await fsp.mkdtemp(path.join(os.tmpdir(), "vc-groq-"));
+  try {
+    // Phase 1 — prepare chunk audio (parallel). ffmpeg → mono mp3; Groq downsamples to 16kHz.
+    const prep0 = Date.now();
+    const prepared = await mapWithConcurrency(chunks, env.groqConcurrency, async (c) => {
+      const chunkPath = path.join(tmpRoot, `chunk-${c.i}.mp3`);
+      await extractAudioMp3(videoPath, chunkPath, c.regionStart, c.extractDur);
+      return { c, chunkPath };
+    });
+    const prepMs = Date.now() - prep0;
+
+    // Phase 2 — transcribe chunks (parallel, retrying each independently).
+    const api0 = Date.now();
+    const transcribed = await mapWithConcurrency(prepared, env.groqConcurrency, async ({ c, chunkPath }) => {
+      const resp = await callGroqApiWithRetry(chunkPath, langParam);
+      return { c, resp };
+    });
+    const apiMs = Date.now() - api0;
+
+    // Phase 3 — merge in order, offset timestamps, de-dup by owned region.
+    const merge0 = Date.now();
+    const words: TranscriptWord[] = [];
+    let detectedLang = "";
+    for (const { c, resp } of transcribed.slice().sort((a, b) => a.c.i - b.c.i)) {
+      if (!detectedLang && resp.language) detectedLang = resp.language;
+      for (const w of resp.words ?? []) {
+        const start = w.start + c.regionStart;
+        // A word belongs to exactly one chunk: the one whose owned region holds its start.
+        if (!c.isLast && start >= c.regionEnd) continue;
+        const word = (w.word ?? "").trim();
+        if (!word) continue;
+        words.push({ start, end: Math.max(w.end + c.regionStart, start + 0.05), word });
+      }
+    }
+    words.sort((a, b) => a.start - b.start);
+    let transcript: Transcript = {
+      text: words.map((w) => w.word).join(" "),
+      segments: groupWordsIntoSegments(words),
+      words,
+      provider: "groq",
+    };
+    if (romanize) transcript = romanizeTranscript(transcript);
+    const mergeMs = Date.now() - merge0;
+
+    const totalSec = (Date.now() - started) / 1000;
+    const rtf = durationSec > 0 ? totalSec / durationSec : 0;
+    log.info("Groq transcription complete", {
+      model: env.groqSttModel,
+      audioPrepSec: +(prepMs / 1000).toFixed(1),
+      apiSec: +(apiMs / 1000).toFixed(1),
+      parseMergeSec: +(mergeMs / 1000).toFixed(2),
+      totalSec: +totalSec.toFixed(1),
+      audioMinutes: +(durationSec / 60).toFixed(1),
+      realTimeFactor: +rtf.toFixed(3),
+      chunks: chunkCount,
+      words: words.length,
+      detectedLanguage: detectedLang || langParam || "auto",
+      approxCostUsd: +((durationSec / 3600) * GROQ_PRICE_PER_HOUR).toFixed(4),
+    });
+    if (!words.length) throw new Error("Groq returned no words (empty/invalid response).");
+    return transcript;
+  } finally {
+    await fsp.rm(tmpRoot, { recursive: true, force: true });
+  }
 }
 
 // --------------------------------------------------------------------------
