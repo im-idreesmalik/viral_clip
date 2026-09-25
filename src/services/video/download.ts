@@ -137,6 +137,9 @@ export async function downloadVideo(url: string, destDir: string): Promise<Downl
     "--retries", "10",
     "--fragment-retries", "10",
     "--socket-timeout", "30",
+    // Download DASH fragments in parallel instead of one-at-a-time (yt-dlp
+    // default is 1). This is the main speed win on a fast link (~715 Mbps here).
+    "--concurrent-fragments", "64",
   ];
   if (FFMPEG_DIR) args.push("--ffmpeg-location", FFMPEG_DIR);
   await runYtDlp(args);
