@@ -74,8 +74,11 @@ export const env = {
   // loads so non-Latin subtitles render instead of showing boxes.
   fontsDir: process.env.FONTS_DIR || path.resolve("tools/fonts"),
 
-  // AI clip detection provider: "ollama" (local, free) or "anthropic" (cloud).
-  aiProvider: (process.env.AI_PROVIDER || "ollama") as "ollama" | "anthropic",
+  // AI clip detection provider: "ollama" (local, free, default) | "groq" (cloud,
+  // fast) | "anthropic" (cloud). Switch with AI_PROVIDER; ollama stays default.
+  aiProvider: (process.env.AI_PROVIDER || "ollama") as "ollama" | "groq" | "anthropic",
+  // Groq model for clip detection when AI_PROVIDER=groq (reuses GROQ_API_KEY).
+  groqAnalysisModel: process.env.GROQ_ANALYSIS_MODEL || "openai/gpt-oss-120b",
 
   // Local LLM via Ollama (https://ollama.com).
   ollama: {

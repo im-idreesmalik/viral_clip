@@ -79,7 +79,9 @@ export async function detectViralClips(opts: DetectViralOptions): Promise<Detect
   const rawJson =
     env.aiProvider === "anthropic"
       ? await runAnthropic(system, userMessage)
-      : await runOllama(system, userMessage);
+      : env.aiProvider === "groq"
+        ? await runGroq(system, userMessage)
+        : await runOllama(system, userMessage);
 
   let parsed: z.infer<typeof responseSchema>;
   try {
@@ -143,6 +145,67 @@ async function runOllama(system: string, userMessage: string): Promise<string> {
     const content = json?.message?.content;
     if (!content) throw new Error("Ollama returned an empty response.");
     return content;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+// ---- Cloud provider: Groq (OpenAI-compatible; e.g. openai/gpt-oss-120b) ---
+
+// gpt-oss-120b ignores response_format json_schema (returns free-form), so we use
+// the reliable json_object mode + an explicit output-shape instruction. This adds
+// NO viral criteria — it only pins the JSON shape (the selection prompt is unchanged).
+const GROQ_JSON_INSTRUCTION =
+  'Respond with ONLY a JSON object of this exact shape, no prose and no markdown fences: ' +
+  '{"clips":[{"startSec":<number>,"endSec":<number>,"title":<string>,"viralScore":<integer 0-100>,"reason":<string>}]}';
+
+/** Extract the outermost JSON object from a model reply (strips fences / stray prose). */
+function extractJsonObject(s: string): string {
+  const first = s.indexOf("{");
+  const last = s.lastIndexOf("}");
+  return first >= 0 && last > first ? s.slice(first, last + 1) : s;
+}
+
+async function runGroq(system: string, userMessage: string): Promise<string> {
+  if (!env.groqApiKey) {
+    throw new Error("GROQ_API_KEY is required for AI_PROVIDER=groq (get one at https://console.groq.com/keys).");
+  }
+  log.info("Requesting viral clip analysis (Groq)", { model: env.groqAnalysisModel });
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), env.aiTimeoutMs);
+  try {
+    let res: Response;
+    try {
+      res = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${env.groqApiKey}` }, // key never logged
+        signal: controller.signal,
+        body: JSON.stringify({
+          model: env.groqAnalysisModel,
+          temperature: 0.4,
+          response_format: { type: "json_object" },
+          messages: [
+            { role: "system", content: system },
+            { role: "user", content: `${userMessage}\n\n${GROQ_JSON_INSTRUCTION}` },
+          ],
+        }),
+      });
+    } catch (err) {
+      if (controller.signal.aborted) throw new Error(`Groq timed out after ${env.aiTimeoutMs}ms.`);
+      throw new Error(`Could not reach Groq: ${err instanceof Error ? err.message : err}`);
+    }
+    if (!res.ok) {
+      const body = await res.text().catch(() => "");
+      throw new Error(`Groq error ${res.status}: ${body.slice(0, 300)}`);
+    }
+    const json = await res.json();
+    const usage = json?.usage;
+    if (usage) {
+      log.info("Groq analysis usage", { promptTokens: usage.prompt_tokens, completionTokens: usage.completion_tokens });
+    }
+    const content = json?.choices?.[0]?.message?.content;
+    if (!content) throw new Error("Groq returned an empty response.");
+    return extractJsonObject(content);
   } finally {
     clearTimeout(timer);
   }
