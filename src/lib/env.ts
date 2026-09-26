@@ -77,8 +77,33 @@ export const env = {
   // AI clip detection provider: "ollama" (local, free, default) | "groq" (cloud,
   // fast) | "anthropic" (cloud). Switch with AI_PROVIDER; ollama stays default.
   aiProvider: (process.env.AI_PROVIDER || "ollama") as "ollama" | "groq" | "anthropic",
-  // Groq model for clip detection when AI_PROVIDER=groq (reuses GROQ_API_KEY).
+  // Transcript-analysis PRIMARY provider for the hybrid pipeline. Production
+  // default = groq (gpt-oss-120b, ~10x faster than local Gemma); on failure the
+  // hybrid detector falls back groq -> ollama(Gemma) -> time-based segmentation.
+  analysisProvider: (process.env.ANALYSIS_PROVIDER || "groq") as "groq" | "ollama" | "anthropic",
+  // Groq model for clip detection when analysis provider is groq (reuses GROQ_API_KEY).
   groqAnalysisModel: process.env.GROQ_ANALYSIS_MODEL || "openai/gpt-oss-120b",
+
+  // --- Hybrid pipeline: local visual discovery (FFmpeg, free) ---------------
+  visualDiscoveryEnabled: (process.env.VISUAL_DISCOVERY_ENABLED ?? "true") !== "false",
+  // FFmpeg scene-change score (0-1) above which a frame is a scene cut.
+  sceneThreshold: num(process.env.SCENE_THRESHOLD, 0.4),
+  // Hard cap on visual candidates (keeps long videos bounded). Configurable.
+  maxVisualCandidates: int(process.env.MAX_VISUAL_CANDIDATES, 30),
+  // Periodic coverage: force a visual anchor at least every N seconds so long
+  // continuous shots aren't ignored by scene detection.
+  visualSampleIntervalSec: int(process.env.VISUAL_SAMPLE_INTERVAL_SEC, 45),
+
+  // --- Hybrid pipeline: selective multimodal (vision) stage -----------------
+  // Off by default: pipeline still works on transcript + local visual evidence.
+  visionEnabled: process.env.VISION_ENABLED === "true",
+  visionProvider: (process.env.VISION_PROVIDER || "gemini").toLowerCase(),
+  geminiApiKey: process.env.GEMINI_API_KEY || "",
+  geminiVisionModel: process.env.GEMINI_VISION_MODEL || "gemini-2.5-flash",
+  // Representative-frame width sent to the vision model (keep small/cheap).
+  visionFrameWidth: int(process.env.VISION_FRAME_WIDTH, 640),
+  // Max merged candidates that reach the (paid) vision stage.
+  visionMaxCandidates: int(process.env.VISION_MAX_CANDIDATES, 20),
 
   // Local LLM via Ollama (https://ollama.com).
   ollama: {

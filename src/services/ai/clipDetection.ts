@@ -66,7 +66,10 @@ const OUTPUT_JSON_SCHEMA = {
  * Detect viral clips using the configured AI provider (local Ollama by default,
  * or cloud Anthropic). Both return the same normalized DetectedClip[].
  */
-export async function detectViralClips(opts: DetectViralOptions): Promise<DetectedClip[]> {
+export async function detectViralClips(
+  opts: DetectViralOptions,
+  provider: string = env.aiProvider,
+): Promise<DetectedClip[]> {
   const { transcript, durationSec, threshold, maxClips } = opts;
   if (!transcript || transcript.segments.length === 0) {
     throw new Error("A transcript is required for AI viral detection.");
@@ -77,11 +80,11 @@ export async function detectViralClips(opts: DetectViralOptions): Promise<Detect
   const userMessage = buildUserPrompt(transcriptText, threshold, durationSec);
 
   const rawJson =
-    env.aiProvider === "anthropic"
+    provider === "anthropic"
       ? await runAnthropic(system, userMessage)
-      : env.aiProvider === "groq"
-        ? await runGroq(system, userMessage)
-        : await runOllama(system, userMessage);
+      : provider === "ollama"
+        ? await runOllama(system, userMessage)
+        : await runGroq(system, userMessage);
 
   let parsed: z.infer<typeof responseSchema>;
   try {
@@ -92,6 +95,32 @@ export async function detectViralClips(opts: DetectViralOptions): Promise<Detect
   }
 
   return normalizeClips(parsed.clips, durationSec, threshold, maxClips);
+}
+
+/**
+ * Transcript analysis with a graceful provider chain for production:
+ *   ANALYSIS_PROVIDER (default groq / gpt-oss-120b)  ->  local Ollama (Gemma)
+ * The caller applies the final time-based (segmentation) fallback if this throws.
+ */
+export async function detectViralClipsFallback(
+  opts: DetectViralOptions,
+): Promise<{ clips: DetectedClip[]; provider: string }> {
+  const primary = env.analysisProvider;
+  const chain = primary === "ollama" ? ["ollama"] : [primary, "ollama"];
+  let lastErr: unknown;
+  for (const p of chain) {
+    try {
+      const clips = await detectViralClips(opts, p);
+      return { clips, provider: p };
+    } catch (err) {
+      lastErr = err;
+      log.warn("Transcript analysis provider failed; trying next", {
+        provider: p,
+        message: err instanceof Error ? err.message : String(err),
+      });
+    }
+  }
+  throw lastErr instanceof Error ? lastErr : new Error("all transcript-analysis providers failed");
 }
 
 // ---- Local provider: Ollama ----------------------------------------------

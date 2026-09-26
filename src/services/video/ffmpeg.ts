@@ -8,6 +8,8 @@
  */
 import fs from "node:fs";
 import path from "node:path";
+import { execFile } from "node:child_process";
+import { promisify } from "node:util";
 import ffmpeg from "fluent-ffmpeg";
 import ffmpegStatic from "ffmpeg-static";
 import ffprobeStatic from "ffprobe-static";
@@ -16,6 +18,7 @@ import { createLogger } from "@/lib/logger";
 import { listGenericFootage } from "@/lib/storage";
 
 const log = createLogger("ffmpeg");
+const execFileAsync = promisify(execFile);
 
 // Resolve binary paths once: prefer explicit env overrides, fall back to the
 // bundled static binaries, and finally to whatever is on PATH.
@@ -547,6 +550,43 @@ export async function selectGenericFootage(durationSec: number): Promise<string[
     guard++;
   }
   return picks;
+}
+
+export interface SceneCut {
+  time: number; // seconds
+  score: number; // 0-1 scene-change score
+}
+
+/**
+ * Detect scene-change timestamps in ONE downscaled decode pass (no frames
+ * exported — timestamps + scores only). Parses ffmpeg's metadata=print output
+ * from stderr (avoids the Windows `file=C:` colon-path problem). Free + local.
+ */
+export async function detectScenes(input: string, threshold: number): Promise<SceneCut[]> {
+  const bin = env.ffmpegPath || (ffmpegStatic as string);
+  if (!bin) throw new Error("ffmpeg binary not found for scene detection");
+  const args = [
+    "-hide_banner", "-nostats",
+    "-i", input,
+    "-an",
+    // Downscale for speed; select scene cuts above threshold; print their metadata.
+    "-vf", `scale=320:-2,select='gt(scene,${threshold})',metadata=print`,
+    "-f", "null", "-",
+  ];
+  const { stderr } = await execFileAsync(bin, args, {
+    timeout: env.renderTimeoutMs,
+    killSignal: "SIGKILL",
+    maxBuffer: 1024 * 1024 * 128,
+  });
+  const cuts: SceneCut[] = [];
+  let curTime: number | null = null;
+  for (const line of (stderr || "").split(/\r?\n/)) {
+    const t = line.match(/pts_time:([0-9.]+)/);
+    if (t) { curTime = parseFloat(t[1]); continue; }
+    const s = line.match(/lavfi\.scene_score=([0-9.]+)/);
+    if (s && curTime != null) { cuts.push({ time: curTime, score: parseFloat(s[1]) }); curTime = null; }
+  }
+  return cuts;
 }
 
 /** Capture a single-frame JPEG thumbnail at the given timestamp. */

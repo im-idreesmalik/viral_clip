@@ -19,8 +19,8 @@ import { downloadVideo } from "./download";
 import { transcribe, type Transcript } from "./transcription";
 import { buildCaptions, type CaptionStyle } from "@/services/captions/subtitles";
 import { captionFont } from "@/services/captions/fonts";
-import { detectViralClips } from "@/services/ai/clipDetection";
 import { segmentVideo } from "@/services/ai/segmentation";
+import { hybridDetect, type HybridStats } from "@/services/ai/hybridDetect";
 import type { DetectedClip } from "@/services/ai/types";
 
 const log = createLogger("pipeline");
@@ -32,8 +32,12 @@ export async function processVideo(videoId: string): Promise<void> {
   log.info("Processing video", { videoId, mode: video.clipMode, source: video.source });
 
   try {
+    const pipeStart = Date.now();
+    let hybridStats: HybridStats | undefined;
+    let downloadSec = 0, transcriptionSec = 0, renderSec = 0;
     // 1. Ensure we have the source file on disk + its metadata.
     let storageKey = video.storageKey;
+    const dlStart = Date.now();
     if (video.source === VideoSource.YOUTUBE && !storageKey) {
       await setStatus(videoId, VideoStatus.DOWNLOADING);
       const destDir = resolveKey(`videos/${videoId}`);
@@ -48,6 +52,8 @@ export async function processVideo(videoId: string): Promise<void> {
       });
     }
     if (!storageKey) throw new Error("No source media available for this video.");
+    downloadSec = (Date.now() - dlStart) / 1000;
+    log.info("[DOWNLOAD]", { sec: Math.round(downloadSec * 10) / 10 });
 
     const sourcePath = resolveKey(storageKey);
     const meta = await probe(sourcePath);
@@ -72,6 +78,7 @@ export async function processVideo(videoId: string): Promise<void> {
     // 2. Transcribe — reuse a cached transcript (e.g. on reprocess) to skip the
     //    expensive re-run; otherwise transcribe once and cache it. Best-effort.
     await setStatus(videoId, VideoStatus.TRANSCRIBING);
+    const trStart = Date.now();
     let transcript = (video.transcript as unknown as Transcript | null) ?? null;
     if (!transcript) {
       transcript = await transcribe(sourcePath, video.language);
@@ -82,6 +89,8 @@ export async function processVideo(videoId: string): Promise<void> {
         });
       }
     }
+    transcriptionSec = (Date.now() - trStart) / 1000;
+    log.info("[TRANSCRIPTION]", { sec: Math.round(transcriptionSec * 10) / 10, cached: !!(video.transcript), provider: env.transcriptionProvider });
 
     // 3. Determine clips. If this video already has clips (a retry after an
     //    interruption), RESUME: keep the ones already rendered and finish only
@@ -105,13 +114,18 @@ export async function processVideo(videoId: string): Promise<void> {
       log.info("Resuming render", { videoId, remaining: unfinished.length, alreadyReady: existing.length - unfinished.length });
     } else {
       await setStatus(videoId, VideoStatus.ANALYZING);
-      const detected = await selectClips(video.clipMode, {
+      const selection = await selectClips(video.clipMode, {
+        sourcePath,
+        videoId,
         durationSec: meta.durationSec,
+        hasAudio: meta.hasAudio,
         transcript,
         threshold: video.viralThreshold,
         segmentSeconds: video.segmentSeconds,
         maxClips: video.targetClipCount,
       });
+      const detected = selection.clips;
+      hybridStats = selection.stats;
       if (detected.length === 0) {
         throw new Error("No clips could be generated from this video.");
       }
@@ -137,6 +151,7 @@ export async function processVideo(videoId: string): Promise<void> {
     // 4. Render clips — a few at a time so the CPU filters and the GPU encoder
     //    work in parallel instead of one clip blocking the next.
     await setStatus(videoId, VideoStatus.GENERATING);
+    const renderStart = Date.now();
     // On the GPU (NVENC) cap parallel encodes so we don't exceed the encoder's
     // session limit or overload the driver; the CPU encoder can use the full count.
     const isGpu = env.ffmpegVideoEncoder === "h264_nvenc";
@@ -155,6 +170,8 @@ export async function processVideo(videoId: string): Promise<void> {
       );
     }
 
+    renderSec = (Date.now() - renderStart) / 1000;
+
     // If every clip failed to render, the video isn't "ready" — fail it so the
     // dashboard shows an error and the user can retry, instead of an empty READY.
     const readyCount = await prisma.clip.count({
@@ -166,6 +183,25 @@ export async function processVideo(videoId: string): Promise<void> {
 
     await setStatus(videoId, VideoStatus.READY);
     log.info("Video processing complete", { videoId, clips: readyCount });
+
+    // ---- Pipeline performance summary ----
+    const r1 = (n: number) => Math.round(n * 10) / 10;
+    log.info("[PIPELINE] performance", {
+      downloadSec: r1(downloadSec),
+      transcriptionSec: r1(transcriptionSec),
+      transcriptAnalysisSec: hybridStats ? hybridStats.analysisSec : undefined,
+      visualDiscoverySec: hybridStats ? hybridStats.visualSec : undefined,
+      visionSec: hybridStats && hybridStats.visionCalls ? hybridStats.visionSec : undefined,
+      renderSec: r1(renderSec),
+      totalSec: r1((Date.now() - pipeStart) / 1000),
+      transcriptCandidates: hybridStats?.transcriptCount,
+      visualCandidates: hybridStats?.visualCount,
+      mergedCandidates: hybridStats?.mergedCount,
+      finalClips: readyCount,
+      analysisProvider: hybridStats?.analysisProvider,
+      visionCalls: hybridStats?.visionCalls,
+      visionCostUsd: hybridStats?.visionCostUsd,
+    });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     log.error("Video processing failed", { videoId, message });
@@ -178,7 +214,10 @@ export async function processVideo(videoId: string): Promise<void> {
 }
 
 interface SelectArgs {
+  sourcePath: string;
+  videoId: string;
   durationSec: number;
+  hasAudio: boolean;
   transcript: Transcript | null;
   threshold: number;
   segmentSeconds: number;
@@ -189,41 +228,46 @@ interface SelectArgs {
 // just guard against pathological counts on very long videos.
 const FULL_MODE_MAX_PARTS = 500;
 
-async function selectClips(mode: ClipMode, args: SelectArgs): Promise<DetectedClip[]> {
+async function selectClips(mode: ClipMode, args: SelectArgs): Promise<{ clips: DetectedClip[]; stats?: HybridStats }> {
   if (mode === ClipMode.FULL) {
-    return segmentVideo({
-      durationSec: args.durationSec,
-      segmentSeconds: args.segmentSeconds,
-      maxClips: FULL_MODE_MAX_PARTS,
-      transcript: args.transcript,
-    });
+    return {
+      clips: segmentVideo({
+        durationSec: args.durationSec,
+        segmentSeconds: args.segmentSeconds,
+        maxClips: FULL_MODE_MAX_PARTS,
+        transcript: args.transcript,
+      }),
+    };
   }
 
-  // VIRAL mode — needs a transcript to judge content; otherwise fall back.
-  if (args.transcript && args.transcript.segments.length > 0) {
-    try {
-      const clips = await detectViralClips({
-        transcript: args.transcript,
-        durationSec: args.durationSec,
-        threshold: args.threshold,
-        maxClips: args.maxClips,
-      });
-      if (clips.length > 0) return clips;
-      log.warn("AI returned no clips above threshold; falling back to segmentation.");
-    } catch (err) {
-      log.warn("AI detection failed; falling back to segmentation", {
-        message: err instanceof Error ? err.message : String(err),
-      });
-    }
-  } else {
-    log.warn("No transcript available for VIRAL mode; using segmentation fallback.");
+  // VIRAL mode — HYBRID: transcript analysis (Groq gpt-oss-120b -> Ollama Gemma)
+  // in parallel with local FFmpeg visual discovery, union-merged, then a selective
+  // vision pass on the shortlist. Time-based segmentation is the final fallback.
+  try {
+    const { clips, stats } = await hybridDetect({
+      sourcePath: args.sourcePath,
+      videoId: args.videoId,
+      durationSec: args.durationSec,
+      hasAudio: args.hasAudio,
+      transcript: args.transcript,
+      threshold: args.threshold,
+      maxClips: args.maxClips,
+    });
+    if (clips.length > 0) return { clips, stats };
+    log.warn("Hybrid detection produced no clips above threshold; using segmentation fallback.");
+  } catch (err) {
+    log.warn("Hybrid detection failed; using segmentation fallback", {
+      message: err instanceof Error ? err.message : String(err),
+    });
   }
-  return segmentVideo({
-    durationSec: args.durationSec,
-    segmentSeconds: args.segmentSeconds,
-    maxClips: args.maxClips,
-    transcript: args.transcript,
-  });
+  return {
+    clips: segmentVideo({
+      durationSec: args.durationSec,
+      segmentSeconds: args.segmentSeconds,
+      maxClips: args.maxClips,
+      transcript: args.transcript,
+    }),
+  };
 }
 
 /**
