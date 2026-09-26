@@ -49,15 +49,18 @@ export async function discoverVisualCandidates(
     }
   } catch { /* no cache */ }
 
-  // (A) scene cuts
+  // (A) scene cuts (keyframe-only decode — the fast path)
+  const tScene = Date.now();
   let cuts: SceneCut[] = [];
   try {
     cuts = await detectScenes(sourcePath, env.sceneThreshold);
   } catch (err) {
     log.warn("Scene detection failed; continuing with audio + periodic only", { message: msg(err) });
   }
+  const sceneSec = (Date.now() - tScene) / 1000;
 
   // (C) audio energy — windowed RMS, normalized to the video's own peak.
+  const tAudio = Date.now();
   let energy: { t: number; rms: number }[] = [];
   if (hasAudio) {
     try {
@@ -67,6 +70,7 @@ export async function discoverVisualCandidates(
       log.warn("Audio energy extraction failed; continuing", { message: msg(err) });
     }
   }
+  const audioSec = (Date.now() - tAudio) / 1000;
   const maxRms = energy.reduce((m, e) => Math.max(m, e.rms), 0) || 1;
 
   // Build interest points from cuts + audio peaks + periodic anchors.
@@ -104,6 +108,7 @@ export async function discoverVisualCandidates(
   log.info("Visual discovery complete", {
     videoId, cuts: cuts.length, audioPeaks: energy.filter((e) => e.rms / maxRms >= 0.55).length,
     clusters: clusters.length, candidates: capped.length,
+    sceneSec: Math.round(sceneSec * 10) / 10, audioSec: Math.round(audioSec * 10) / 10,
   });
   return finish(videoId, cf, capped);
 }

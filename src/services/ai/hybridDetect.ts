@@ -25,7 +25,7 @@ import { detectViralClipsFallback } from "./clipDetection";
 import { discoverVisualCandidates } from "./visualDiscovery";
 import { mergeCandidates } from "./candidateMerge";
 import { getVisionProvider, isVisionEnabled } from "./vision";
-import type { DetectedClip, MergedCandidate } from "./types";
+import type { DetectedClip, MergedCandidate, VisualCandidate } from "./types";
 
 const log = createLogger("ai:hybrid");
 const MAX_CLIP = 60;
@@ -56,35 +56,40 @@ export interface HybridStats {
 }
 
 export async function hybridDetect(opts: HybridOptions): Promise<{ clips: DetectedClip[]; stats: HybridStats }> {
-  // ---- A + B in parallel ----
-  const analysisStart = Date.now();
+  // ---- A + B in parallel (each stage times ITSELF, not the joint wait) ----
+  const parallelStart = Date.now();
   const transcriptP = (async () => {
-    if (!opts.transcript || opts.transcript.segments.length === 0) return { clips: [] as DetectedClip[], provider: "none" };
+    const s = Date.now();
+    if (!opts.transcript || opts.transcript.segments.length === 0) return { clips: [] as DetectedClip[], provider: "none", sec: 0 };
     try {
-      return await detectViralClipsFallback({
+      const r = await detectViralClipsFallback({
         transcript: opts.transcript, durationSec: opts.durationSec, threshold: opts.threshold, maxClips: opts.maxClips,
       });
+      return { ...r, sec: (Date.now() - s) / 1000 };
     } catch (err) {
       log.warn("[TRANSCRIPT_ANALYSIS] all providers failed; continuing visual-only", { message: msg(err) });
-      return { clips: [] as DetectedClip[], provider: "failed" };
+      return { clips: [] as DetectedClip[], provider: "failed", sec: (Date.now() - s) / 1000 };
     }
   })();
-  const visualStart = Date.now();
   const visualP = (async () => {
-    if (!env.visualDiscoveryEnabled) return [];
+    const s = Date.now();
+    if (!env.visualDiscoveryEnabled) return { cands: [] as VisualCandidate[], sec: 0 };
     try {
-      return await discoverVisualCandidates(opts.sourcePath, opts.durationSec, opts.videoId, opts.hasAudio);
+      const c = await discoverVisualCandidates(opts.sourcePath, opts.durationSec, opts.videoId, opts.hasAudio);
+      return { cands: c, sec: (Date.now() - s) / 1000 };
     } catch (err) {
       log.warn("[VISUAL_DISCOVERY] failed; continuing transcript-only", { message: msg(err) });
-      return [];
+      return { cands: [] as VisualCandidate[], sec: (Date.now() - s) / 1000 };
     }
   })();
 
-  const [{ clips: transcriptClips, provider }, visualCands] = await Promise.all([transcriptP, visualP]);
-  const analysisSec = (Date.now() - analysisStart) / 1000;
-  const visualSec = (Date.now() - visualStart) / 1000;
+  const [tp, vp] = await Promise.all([transcriptP, visualP]);
+  const transcriptClips = tp.clips, provider = tp.provider, analysisSec = tp.sec;
+  const visualCands = vp.cands, visualSec = vp.sec;
+  const parallelWallSec = (Date.now() - parallelStart) / 1000;
   log.info("[TRANSCRIPT_ANALYSIS]", { provider, clips: transcriptClips.length, sec: round1(analysisSec) });
   log.info("[VISUAL_DISCOVERY]", { candidates: visualCands.length, sec: round1(visualSec) });
+  log.info("[PARALLEL_PHASE]", { wallSec: round1(parallelWallSec), analysisSec: round1(analysisSec), visualSec: round1(visualSec) });
 
   // ---- UNION merge ----
   const merged = mergeCandidates(transcriptClips, visualCands);

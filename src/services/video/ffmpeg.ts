@@ -558,8 +558,11 @@ export interface SceneCut {
 }
 
 /**
- * Detect scene-change timestamps in ONE downscaled decode pass (no frames
- * exported — timestamps + scores only). Parses ffmpeg's metadata=print output
+ * Detect scene-change timestamps. Decodes ONLY keyframes (`-skip_frame nokey`)
+ * which is ~7x faster than a full decode (the decode was the bottleneck — fps
+ * filters/GPU decode don't help). Keyframes are seconds apart, so inter-frame
+ * differences are meaningful even on low-motion content (full-fps neighbours
+ * differ by ~nothing and hide real change). Downscaled; parses metadata=print
  * from stderr (avoids the Windows `file=C:` colon-path problem). Free + local.
  */
 export async function detectScenes(input: string, threshold: number): Promise<SceneCut[]> {
@@ -567,6 +570,7 @@ export async function detectScenes(input: string, threshold: number): Promise<Sc
   if (!bin) throw new Error("ffmpeg binary not found for scene detection");
   const args = [
     "-hide_banner", "-nostats",
+    "-skip_frame", "nokey", // decode keyframes only — the big speed win
     "-i", input,
     "-an",
     // Downscale for speed; select scene cuts above threshold; print their metadata.

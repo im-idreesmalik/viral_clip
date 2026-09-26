@@ -86,8 +86,10 @@ export const env = {
 
   // --- Hybrid pipeline: local visual discovery (FFmpeg, free) ---------------
   visualDiscoveryEnabled: (process.env.VISUAL_DISCOVERY_ENABLED ?? "true") !== "false",
-  // FFmpeg scene-change score (0-1) above which a frame is a scene cut.
-  sceneThreshold: num(process.env.SCENE_THRESHOLD, 0.4),
+  // Scene-change score (0-1) above which a keyframe is a visual "event". Tuned
+  // for keyframe-decode mode (scores run higher than full-fps since keyframes are
+  // seconds apart). Lower = higher recall; clustering + MAX_VISUAL_CANDIDATES bound the count.
+  sceneThreshold: num(process.env.SCENE_THRESHOLD, 0.1),
   // Hard cap on visual candidates (keeps long videos bounded). Configurable.
   maxVisualCandidates: int(process.env.MAX_VISUAL_CANDIDATES, 30),
   // Periodic coverage: force a visual anchor at least every N seconds so long
