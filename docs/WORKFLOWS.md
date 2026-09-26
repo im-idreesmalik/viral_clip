@@ -8,6 +8,23 @@ what talks to what, where state lives, and how failures are handled.
 
 ---
 
+## Models at a glance (exact names)
+
+| Stage | Model / engine (exact id) | Provider | Role |
+|---|---|---|---|
+| **Transcription (STT)** | **`whisper-large-v3-turbo`** | **Groq** (cloud) | Primary — word-level timestamps, ~228× realtime |
+| ↳ fallback STT | `ggml-large-v3` (whisper.cpp CUDA) · `Xenova/whisper-base.en` (transformers.js) | local | Only if Groq unset/fails |
+| **Transcript viral analysis (LLM)** | **`openai/gpt-oss-120b`** | **Groq** (cloud) | Primary — picks viral moments from transcript |
+| ↳ fallback analysis | **`gemma3:12b-it-qat`** (Ollama) → then time-based segmentation | local | On Groq failure/TPM limit |
+| ↳ optional analysis | `claude-opus-4-8` | Anthropic | Only if `AI_PROVIDER=anthropic` |
+| **Local visual discovery** | FFmpeg (keyframe scene detect + audio RMS) | local | Free — finds where visual change happens |
+| **Selective vision (multimodal)** | **`gemini-2.5-flash`** | Google Gemini | Judges shortlisted candidates from frames; **off by default** |
+| **Voice-over (TTS)** | **`onnx-community/Kokoro-82M-v1.0-ONNX`** + `espeak-ng` | local | English `af_heart`, Urdu `hf_alpha` |
+| **Background music** | **`stabilityai/stable-audio-open-1.0`** (default) · `facebook/musicgen-small` | local (Python) | Stable Audio Open = commercial-safe |
+| **Clip render/encode** | `h264_nvenc` → `libx264` fallback | FFmpeg | GPU encode, CPU fallback |
+
+---
+
 ## 0. Runtime topology (process model)
 
 Three long-lived processes + local services. The **web server only enqueues**; the **worker
@@ -22,10 +39,11 @@ flowchart LR
   Worker[Worker process] -->|consume jobs| Redis
   Worker -->|Prisma| PG
   Worker -->|read/write| FS
-  Worker -->|spawn| FFmpeg & Whisper[whisper.cpp] & Py[Python music] 
-  Worker -->|HTTP| Ollama
+  Worker -->|spawn| Local[FFmpeg · Kokoro/espeak · Python music]
+  Worker -->|HTTPS cloud| Groq[Groq: whisper-large-v3-turbo + gpt-oss-120b]
+  Worker -->|HTTPS cloud| Gemini[Gemini 2.5 Flash vision]
+  Worker -->|HTTP local fallback| Ollama[Ollama: gemma3:12b-it-qat]
   Worker -->|HTTPS| Platforms[YouTube/TikTok/IG/FB]
-  Next -->|HTTP| Ollama
 ```
 
 - **Next.js server** (`npm run dev` / `next start`): API routes, auth, serving media, enqueuing jobs.
@@ -33,10 +51,13 @@ flowchart LR
   stale-job reaper + publish auto-retry). Boots via `src/workers/loadEnv.ts` first
   (`process.loadEnvFile('.env')`, no dotenv dep).
 - **PostgreSQL + Redis** (Docker `viralcut-postgres` / `viralcut-redis`).
-- **Local AI services**: Ollama (`:11434`), whisper.cpp CUDA CLI, Kokoro/espeak (in-process +
-  subprocess), Python music venv (subprocess).
+- **Cloud AI (primary)**: **Groq** (`whisper-large-v3-turbo` STT + `openai/gpt-oss-120b` analysis),
+  **Gemini** (`gemini-2.5-flash`, selective vision, off by default).
+- **Local AI (fallback + always-local stages)**: **Ollama** (`gemma3:12b-it-qat`, analysis fallback;
+  `:11434`), whisper.cpp CUDA / transformers.js (STT fallback), **FFmpeg** (visual discovery + render),
+  **Kokoro-82M**/espeak (TTS), Python music venv (Stable Audio Open).
 - **Storage**: local filesystem under `STORAGE_DIR` (keys like `videos/<id>/…`, `clips/<id>/clip.mp4`,
-  `stories/<id>/audio.mp3`, `music/<id>.mp3`, `generic/…`). Served via `/api/media/[...path]`.
+  `stories/<id>/audio.mp3`, `music/<id>.mp3`, `cache/<id>/…`, `generic/…`). Served via `/api/media/[...path]`.
 
 **Golden rule:** anything slow (download, transcribe, LLM, render, TTS, music, publish) runs in the
 **worker**, never in a request handler. Requests create a DB row + enqueue a job and return.
@@ -77,18 +98,30 @@ Entry: `POST /api/videos` (YouTube) or `/api/videos/upload` (file) creates a `Vi
 sequenceDiagram
   participant W as Worker
   participant DL as yt-dlp
-  participant STT as whisper.cpp (child proc)
-  participant AI as Ollama/Claude
-  participant FF as FFmpeg
+  participant STT as Groq whisper-large-v3-turbo
+  participant AN as Groq gpt-oss-120b (→Gemma)
+  participant VIS as FFmpeg visual discovery
+  participant VZ as Gemini 2.5 Flash (optional)
+  participant FF as FFmpeg render
   W->>W: status DOWNLOADING
   W->>DL: download (H.264 ladder, --no-part)
   DL-->>W: source.mp4 + ffprobe meta
   W->>W: status TRANSCRIBING
-  W->>STT: transcribe (isolated child, SIGKILL timeout)
-  STT-->>W: word-level transcript (cached JSON on Video)
-  W->>W: status ANALYZING
-  W->>AI: VIRAL: detect clips (JSON-schema) / FULL: segment
-  AI-->>W: DetectedClip[]
+  W->>STT: transcribe (chunked, word timestamps)
+  STT-->>W: transcript (cached JSON on Video)
+  W->>W: status ANALYZING (HYBRID)
+  par transcript analysis
+    W->>AN: viral moments (JSON)
+    AN-->>W: transcript candidates
+  and local visual discovery (parallel)
+    W->>VIS: keyframe scenes + audio RMS + periodic
+    VIS-->>W: visual candidates
+  end
+  W->>W: UNION merge (transcript | visual | both)
+  opt VISION_ENABLED
+    W->>VZ: shortlist frames + transcript excerpt
+    VZ-->>W: multimodal viralScore
+  end
   W->>W: status GENERATING, create Clip rows (PENDING)
   loop each clip (batched, GPU-capped)
     W->>FF: render 1080x1920 + captions + watermark + music
@@ -106,27 +139,81 @@ sequenceDiagram
   `MAX_UPLOAD_BYTES` 3 GB), then `ffprobe` for metadata.
 - **AI Story source**: audio-only; footageMode forced `GENERIC` (see §4/§2.4).
 
-### 2.2 Transcription (`transcription.ts`)
-Pluggable via `TRANSCRIPTION_PROVIDER`:
-- **local** (live) — whisper.cpp CUDA CLI: `-m <model> -f <wav> -l <lang> -oj -of --max-len 1
-  --split-on-word`. `--split-on-word` is essential — one **whole word** per segment (without it
-  Urdu/Arabic split into sub-word tokens that break letter-joining).
-- **transformers** — in-process ONNX Whisper, run in an **isolated child** (`transcribe-runner.ts`,
-  `node --import tsx`) because a native onnxruntime GPU segfault is uncatchable; parent falls back
-  **GPU→CPU→none**. `return_timestamps: 'word'`, chunk 30 s / stride 5 s.
-- **openai** — Whisper API, audio chunked ~20 min to stay under 25 MB.
-- Result is a `TranscriptWord[]`, **cached as JSON on the Video** and reused on reprocess.
+### 2.2 Transcription (`transcription.ts`) — `TRANSCRIPTION_PROVIDER`, default **`groq`**
+- **groq** (primary) — Groq **`whisper-large-v3-turbo`** (`/openai/v1/audio/transcriptions`,
+  `response_format=verbose_json`, `timestamp_granularities=[word,segment]`). ~228× realtime; a 14-min
+  video ≈ 12 s. Long audio is **auto-chunked** (~25-min mono-mp3 chunks) under Groq's file limit,
+  transcribed concurrently, then offset + de-duped by word start. Auto language detect (omit
+  `language`). `GROQ_API_KEY` from env only; **key never logged**.
+- **local** (fallback) — whisper.cpp CUDA CLI, **`ggml-large-v3`**: `-oj --max-len 1
+  --split-on-word` — one **whole word** per segment (`-sow` essential; without it Urdu/Arabic split
+  into sub-word tokens that break letter-joining).
+- **transformers** (fallback) — in-process ONNX Whisper (**`Xenova/whisper-base.en`**) in an
+  **isolated child** (`transcribe-runner.ts`) because a native onnxruntime GPU segfault is
+  uncatchable; parent falls back **GPU→CPU→none**. `return_timestamps:'word'`, chunk 30 s / stride 5 s.
+- **openai** (fallback) — Whisper API, chunked ~20 min under 25 MB.
+- Result `TranscriptWord[]` (word start/end) → **cached as JSON on the Video**, reused on reprocess.
 - **Hinglish** (`hi-Latn`): transcribe as Hindi (Devanagari) → `romanizeDevanagari()` → loose Latin.
 
-### 2.3 Clip detection
-- **VIRAL** (`ai/clipDetection.ts`): timestamped transcript → Ollama (`format` JSON schema) or
-  Claude (`output_config.json_schema`, `thinking: adaptive`, streamed, refusal-aware) → zod
-  validation. Clips clamped **15–60 s**, scored 0–100, threshold-filtered (`viralThreshold`),
-  **de-overlapped** (drop >0.5 overlap vs an already-picked clip), sorted by score, capped at
-  `targetClipCount`. On timeout (`AI_TIMEOUT_MS` 5 min) → falls back to segmentation.
-- **FULL** (`ai/segmentation.ts`): sequential `segmentSeconds` cuts snapped to sentence
-  boundaries; short tail merged into previous; guarded by `FULL_MODE_MAX_PARTS=500`. Rendered as
-  "Part N".
+### 2.3 Clip detection — HYBRID (`ai/hybridDetect.ts`)
+
+VIRAL mode runs a **hybrid** detector; FULL mode still uses plain segmentation. Two independent
+discovery paths run **in parallel**, are **union-merged**, then optionally judged by a vision model:
+
+```mermaid
+flowchart TD
+  T[Transcript] --> A["A) Transcript analysis<br/>Groq gpt-oss-120b → Gemma → time-based"]
+  SRC[Source video] --> V["B) Local visual discovery (FFmpeg, free)<br/>keyframe scenes + audio RMS + periodic"]
+  A --> M{UNION merge}
+  V --> M
+  M -->|transcript · visual · both| SL[Shortlist by priority]
+  SL --> VZ["C) Selective vision (optional)<br/>Gemini 2.5 Flash — frames only"]
+  VZ --> N[Normalize → threshold → de-overlap → cap maxClips]
+  M -. vision off .-> N
+  N --> CLIPS[DetectedClip + debug]
+```
+
+**A) Transcript analysis** (`clipDetection.ts` → `detectViralClipsFallback`) — provider chain
+`ANALYSIS_PROVIDER` (default **groq / `openai/gpt-oss-120b`**) → **`gemma3:12b-it-qat`** (Ollama) →
+(caller) time-based segmentation. Groq uses `json_object` (gpt-oss ignores `json_schema`) + an explicit
+shape instruction; Ollama uses `format` JSON schema; optional `claude-opus-4-8`. Same prompt/criteria
+across providers; clips clamped 15–60 s, 0–100 score, threshold-filtered. **maxClips is a MAX, not a
+target** — searches the whole transcript, no padding of weak clips.
+
+**B) Local visual discovery** (`visualDiscovery.ts`) — FREE, FFmpeg-only, **transcript-independent**
+so a visually strong *silent* moment still becomes a candidate:
+- **Scene cuts** — `detectScenes` decodes **keyframes only** (`-skip_frame nokey`, `scale=320`,
+  `select='gt(scene,SCENE_THRESHOLD)'`, parse `lavfi.scene_score` from stderr): ~7× faster than full
+  decode (~10 s for 35 min). Keyframes are seconds apart → scores meaningful on low-motion content.
+- **Audio energy** — windowed RMS from `extractPcmF32` (16 kHz mono): reactions/impacts/peaks (NOT speech).
+- **Periodic coverage** — an anchor every `VISUAL_SAMPLE_INTERVAL_SEC` (45 s) so long continuous shots
+  aren't ignored.
+- Interest points → clustered → padded to 15–60 s → overlaps merged → **capped `MAX_VISUAL_CANDIDATES`
+  (30)**. Each carries `heuristicScore` (discovery ranking, **NOT** virality) + `signals`
+  {sceneChange, sceneDensity, motionActivity, audioEnergy}. Cached to `cache/<id>/visual.json`.
+
+**Merge** (`candidateMerge.ts`) — **UNION**, not intersection. Overlapping/near transcript+visual
+candidates combine into one `source:"both"` keeping **both** evidences; scores are **never averaged**.
+Sources: `transcript` | `visual` | `both`.
+
+**C) Selective vision** (`vision/`, gated by `VISION_ENABLED`, default off) — the top
+`VISION_MAX_CANDIDATES` (20) by priority go to the `VisionProvider` (**`gemini-2.5-flash`**) as **3
+representative frames** (`captureThumbnail`, `VISION_FRAME_WIDTH` 640 — start/mid/end) + transcript
+excerpt + signals. **Never the whole video** (~$0.003 for 6 candidates vs ~$0.19 full-video). The
+vision score is final and can rate a **silent-but-visual** clip very high. Cached to
+`cache/<id>/vision.json`.
+
+**Final scoring** — vision score if judged, else evidence score (transcript `viralScore`; a
+visual-only candidate without vision is capped so a raw heuristic can't outrank a judged clip) →
+threshold → de-overlap (>0.5) → sort → cap `maxClips`. Output =
+`DetectedClip{start,end,title,viralScore,reason}` + debug `{source, transcriptScore,
+visualHeuristicScore, multimodalScore, visualSignals}` (debug not persisted to the Clip row).
+
+**Fallbacks (a stage failure never fails the job):** analysis groq→Gemma→time; visual failure →
+transcript-only; per-candidate vision failure → evidence score; hybrid yields nothing → caller segments.
+
+**FULL mode** (`ai/segmentation.ts`): sequential `segmentSeconds` cuts snapped to sentence boundaries;
+short tail merged; guarded by `FULL_MODE_MAX_PARTS=500`; "Part N". Untouched by the hybrid.
 
 ### 2.4 Clip rendering (`ffmpeg.ts` → `renderClip`)
 Per clip, batched `CLIP_RENDER_CONCURRENCY` (live 6) but capped to `GPU_RENDER_CONCURRENCY_CAP`
@@ -351,6 +438,7 @@ range/206 for scrubbing, and returns **404 (not 401)** on unauth (no key-existen
 | **Stale-job reaper** (60 s) | Fails a Video past `STALE_JOB_MS` (30 min) **only if no clip advanced** in the window (no false-fail of long-but-active renders); also fails clips stuck `RENDERING`. |
 | **Resume-aware processVideo** | On retry with existing clips, re-render only non-`READY` clips (reset to `PENDING`); if all `READY`, jump to `READY`. Transcript reused from cache. |
 | **Isolated STT subprocess** | Native onnxruntime segfault kills only the child; parent falls back GPU→CPU→none. |
+| **Hybrid graceful degradation** | Analysis groq→**gemma3:12b-it-qat**→time-based; visual-discovery failure → transcript-only; per-candidate vision failure → evidence score. A visual/vision failure **never** fails a job whose transcript path succeeded. |
 | **Hard timeouts + SIGKILL** | render 15 m, transcribe 20 m, download 30 m, AI 5 m, story-gen 15 m, music 30 m. |
 | **Queue dedup fixes** | No fixed jobId for reprocess; remove-then-add for publish retries. |
 | **Music retry fix** | Never delete a pending row mid-retry; clean up only after attempts exhausted. |
@@ -388,7 +476,8 @@ stateDiagram-v2
 ## 11. Storage & media serving
 
 - **Keys** under `STORAGE_DIR`: `videos/<id>/source.*`, `clips/<id>/clip.mp4` + `thumb.jpg`,
-  `.captions/<clipId>.ass` (transient), `stories/<id>/audio.mp3`, `music/<id>.mp3`, `generic/<name>`.
+  `.captions/<clipId>.ass` (transient), `stories/<id>/audio.mp3`, `music/<id>.mp3`, `generic/<name>`,
+  **`cache/<id>/visual.json`** + **`cache/<id>/vision.json`** (hybrid discovery/vision caches).
 - `resolveKey` guards against path traversal. `publicUrl(key)` → `/api/media/<key>` (or
   `MEDIA_PUBLIC_BASE` if set).
 - **Serving** (`/api/media/[...path]`): dual-auth (session OR HMAC signature), HTTP range/206,
@@ -398,12 +487,15 @@ stateDiagram-v2
 
 ## 12. Config knobs by workflow
 
-| Workflow | Key env vars |
+| Workflow | Key env vars (model in **bold**) |
 |---|---|
-| LLM | `AI_PROVIDER`, `OLLAMA_MODEL` (gemma3:12b-it-qat), `OLLAMA_NUM_CTX`, `ANTHROPIC_*` |
-| STT | `TRANSCRIPTION_PROVIDER` (local), `WHISPER_CLI`/`WHISPER_MODEL` (large-v3), `TRANSFORMERS_*` |
-| Render | `FFMPEG_VIDEO_ENCODER` (h264_nvenc), `CLIP_RENDER_CONCURRENCY`, `GPU_RENDER_CONCURRENCY_CAP`, `RENDER_TIMEOUT_MS` |
-| TTS | `STORY_VOICE_EN`/`_UR`, `ESPEAK_PATH` |
-| Music | `MUSIC_BACKEND`, `HF_TOKEN`, `STABLE_AUDIO_STEPS`, `MUSIC_MIX_VOLUME` (0.08), `MUSICGEN_TIMEOUT_MS` |
+| STT | `TRANSCRIPTION_PROVIDER`=**groq**, `GROQ_API_KEY`, `GROQ_STT_MODEL`=**whisper-large-v3-turbo**; fallback `WHISPER_CLI`/`WHISPER_MODEL` (**ggml-large-v3**), `TRANSFORMERS_WHISPER_MODEL` |
+| Transcript analysis | `ANALYSIS_PROVIDER`=**groq**, `GROQ_ANALYSIS_MODEL`=**openai/gpt-oss-120b**; fallback `OLLAMA_MODEL`=**gemma3:12b-it-qat**, `OLLAMA_NUM_CTX`; `ANTHROPIC_MODEL`=**claude-opus-4-8**; `AI_TIMEOUT_MS` |
+| Local visual discovery | `VISUAL_DISCOVERY_ENABLED`, `SCENE_THRESHOLD` (0.1, keyframe-tuned), `MAX_VISUAL_CANDIDATES` (30), `VISUAL_SAMPLE_INTERVAL_SEC` (45) |
+| Selective vision | `VISION_ENABLED` (false), `VISION_PROVIDER`=gemini, `GEMINI_API_KEY`, `GEMINI_VISION_MODEL`=**gemini-2.5-flash**, `VISION_FRAME_WIDTH` (640), `VISION_MAX_CANDIDATES` (20) |
+| Render | `FFMPEG_VIDEO_ENCODER` (**h264_nvenc**→libx264), `CLIP_RENDER_CONCURRENCY`, `GPU_RENDER_CONCURRENCY_CAP`, `RENDER_TIMEOUT_MS` |
+| TTS | **Kokoro-82M** (`onnx-community/Kokoro-82M-v1.0-ONNX`), `STORY_VOICE_EN`=af_heart/`_UR`=hf_alpha, `ESPEAK_PATH` |
+| Music | `MUSIC_BACKEND`=stable-audio (**stabilityai/stable-audio-open-1.0**), `HF_TOKEN`, `STABLE_AUDIO_STEPS`, `MUSIC_MIX_VOLUME` (0.08), `MUSICGEN_TIMEOUT_MS` |
+| Story writing | `AI_PROVIDER` (ollama, **gemma3:12b-it-qat**) or anthropic (**claude-opus-4-8**), `STORY_GEN_TIMEOUT_MS` |
 | Queue/worker | `*_WORKER_CONCURRENCY`, `STALE_JOB_MS`, `PUBLISH_AUTO_RETRY_*` |
 | Publish | `YOUTUBE_*`, `TIKTOK_*`, `INSTAGRAM_*`, `META_*`, `ENCRYPTION_KEY`, `APP_URL` |
